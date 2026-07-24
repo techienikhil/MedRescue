@@ -4,7 +4,7 @@
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **VitalQ** is a decentralized, AI-driven hospital management and triage ecosystem designed to eliminate clinical bottlenecks, digitize patient history, and automate critical resource allocation. Built during the 24-hour **HackVSIT 7.0** sprint.
+> **MedRescue** is a decentralized, AI-driven hospital management and triage ecosystem designed to eliminate clinical bottlenecks, digitize patient history, and automate critical resource allocation. Built during the 24-hour **HackVSIT 7.0** sprint.
 
 ---
 
@@ -18,7 +18,7 @@ In modern clinics and mid-tier hospitals, patient management is highly fragmente
 ---
 
 ## 💡 Our Solution
-VitalQ replaces the chaos with an intelligent, end-to-end platform:
+MedRescue replaces the chaos with an intelligent, end-to-end platform:
 1. **Universal Patient ID:** A single ID instantly fetches the patient's entire medical history and current prescriptions.
 2. **AI-Powered Priority Triage:** The system analyzes patient profiles upon registration. If critical symptoms (like a history of heart disease) are detected, they are automatically bumped to the top of the queue.
 3. **Smart Inventory & Bed Allocation:** Real-time tracking of medication quantities and hospital bed availability, with AI predictive restocking and outbreak detection.
@@ -47,12 +47,12 @@ VitalQ replaces the chaos with an intelligent, end-to-end platform:
 
 ## 🚀 Local Setup & Installation
 
-Follow these steps to run VitalQ locally:
+Follow these steps to run MedRescue locally:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/VitalQ.git
-cd VitalQ
+git clone https://github.com/your-username/MedRescue.git
+cd MedRescue
 ```
 
 ### 2. Backend Setup
