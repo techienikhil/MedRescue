@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register Hospital — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../login.html">Login</a></li>
+    </ul>
+  </nav>
+
+  <div class="page" style="max-width:700px;">
+
+    <h1 class="page-title text-center">Register Your Hospital</h1>
+    <p class="page-subtitle text-center">Join MedRescue and digitize your hospital operations in minutes.</p>
+
+    <!-- Steps -->
+    <div class="steps mb-3">
+      <div class="step active">
+        <div class="step-number">1</div>
+        <div class="step-label">Register Details</div>
+      </div>
+      <div class="step active">
+        <div class="step-number">2</div>
+        <div class="step-label">Admin Approval</div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-label">Start Managing</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="alert alert-info mb-2" id="formMsg">
+        <strong>ℹ️ Info:</strong> Fill in the details to create your manager account and register your hospital. Your hospital will be submitted for Super Admin review.
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hospital Name</label>
+          <input type="text" id="hName" placeholder="e.g. Metro Life Hospital" required>
+        </div>
+        <div class="form-group">
+          <label>Registration / Govt License ID</label>
+          <input type="text" id="hReg" placeholder="Govt registration ID" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Full Address</label>
+        <input type="text" id="hAddr" placeholder="Street, City, State, Pincode" required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hospital Phone Number</label>
+          <input type="tel" id="hPhone" placeholder="+91 98765 43210" required>
+        </div>
+        <div class="form-group">
+          <label>Hospital Official Email</label>
+          <input type="email" id="hEmail" placeholder="admin@hospital.org" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hospital Type</label>
+          <select id="hType">
+            <option>Multi-Specialty</option>
+            <option>Super Specialty</option>
+            <option>General Hospital</option>
+            <option>Clinic</option>
+            <option>Nursing Home</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Total Beds</label>
+          <input type="number" id="hBeds" placeholder="e.g. 150" required>
+        </div>
+      </div>
+
+      <hr style="margin:1.5rem 0;">
+      <h3 style="margin-bottom:1rem;">Hospital Manager Account</h3>
+
+      <div class="form-group">
+        <label>Your Full Name</label>
+        <input type="text" id="mName" placeholder="Manager Full Name" required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Email (for login)</label>
+          <input type="email" id="mEmail" placeholder="manager@email.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="mPass" placeholder="Min 6 characters" required>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <button class="btn btn-primary btn-lg" style="width:100%;" onclick="registerHospital()">Submit Hospital Registration</button>
+      </div>
+      <p class="text-center mt-2" style="font-size:0.85rem;color:#6b7280;">
+        Already have an account? <a href="../login.html" style="color:#1a56db;font-weight:600;">Login here</a>
+      </p>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    &copy; 2026 MedRescue — Built for Healthcare Excellence
+  </div>
+
+  <script>
+    async function registerHospital() {
+      const name = document.getElementById('hName').value.trim();
+      const addr = document.getElementById('hAddr').value.trim();
+      const phone = document.getElementById('hPhone').value.trim();
+      const email = document.getElementById('hEmail').value.trim();
+      const type = document.getElementById('hType').value;
+      const beds = parseInt(document.getElementById('hBeds').value) || 50;
+      const mName = document.getElementById('mName').value.trim();
+      const mEmail = document.getElementById('mEmail').value.trim();
+      const mPass = document.getElementById('mPass').value.trim();
+
+      if (!name || !addr || !mName || !mEmail || !mPass) {
+        document.getElementById('formMsg').innerHTML = '<strong>⚠️ Error:</strong> Please fill in all required fields.';
+        document.getElementById('formMsg').className = 'alert alert-danger mb-2';
+        return;
+      }
+      if (mPass.length < 6) {
+        document.getElementById('formMsg').innerHTML = '<strong>⚠️ Error:</strong> Password must be at least 6 characters.';
+        document.getElementById('formMsg').className = 'alert alert-danger mb-2';
+        return;
+      }
+
+      const btn = document.querySelector('.btn-primary.btn-lg');
+      btn.textContent = '⏳ Registering Hospital...';
+      btn.disabled = true;
+
+      try {
+        const profile = await Auth.signup(mEmail, mPass, mName, 'manager');
+        const hospId = 'h_' + Date.now().toString(36);
+        const hosp = {
+          id: hospId,
+          name, address: addr, phone, email,
+          type, beds, approved: false, rating: 4.8, image: '🏥'
+        };
+
+        profile.hospitalId = hospId;
+        Auth.saveLocal(profile);
+        DB.hospitals.push(hosp);
+        DB.notifyChange();
+
+        if (typeof FirestoreService !== 'undefined') {
+          try {
+            await FirestoreService.save('hospitals', hosp);
+            if (typeof db !== 'undefined') {
+              await db.collection('users').doc(profile.uid).set({ hospitalId: hospId }, { merge: true });
+            }
+          } catch(e) { console.warn('Firestore sync optional'); }
+        }
+
+        document.getElementById('formMsg').innerHTML = '<strong>✓ Success:</strong> Registration submitted! Redirecting to your dashboard...';
+        document.getElementById('formMsg').className = 'alert alert-success mb-2';
+        setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+      } catch (e) {
+        document.getElementById('formMsg').innerHTML = '<strong>⚠️ Error:</strong> ' + e.message;
+        document.getElementById('formMsg').className = 'alert alert-danger mb-2';
+        btn.textContent = 'Submit Hospital Registration';
+        btn.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>

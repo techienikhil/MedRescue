@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="doctors.html">Doctors</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="billing.html">Billing</a></li>
+      <li><a href="inventory.html">Inventory</a></li>
+      <li><a href="beds.html">Beds</a></li>
+      <li><a href="reports.html" class="active">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">Hospital</span>
+      <div class="nav-avatar" id="navAvatar">H</div>
+    </div>
+  </nav>
+
+  <div class="sidebar-layout">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Hospital Panel</div>
+        <a href="dashboard.html" class="sidebar-item"><span class="sidebar-icon">📊</span> Dashboard</a>
+        <a href="doctors.html" class="sidebar-item"><span class="sidebar-icon">👨‍⚕️</span> Doctors</a>
+        <a href="appointments.html" class="sidebar-item"><span class="sidebar-icon">📅</span> Appointments</a>
+        <a href="prescriptions.html" class="sidebar-item"><span class="sidebar-icon">💊</span> Prescriptions</a>
+        <a href="billing.html" class="sidebar-item"><span class="sidebar-icon">💰</span> Billing</a>
+        <a href="inventory.html" class="sidebar-item"><span class="sidebar-icon">📦</span> Inventory</a>
+        <a href="beds.html" class="sidebar-item"><span class="sidebar-icon">🛏️</span> Bed Management</a>
+        <a href="reports.html" class="sidebar-item active"><span class="sidebar-icon">📄</span> Reports</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Account</div>
+        <a href="../index.html" class="sidebar-item" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')"><span class="sidebar-icon">🚪</span> Logout</a>
+      </div>
+    </div>
+
+    <div class="main-content" id="app">
+      <div class="flex-between mb-2">
+        <div>
+          <h1 class="page-title">Patient Reports</h1>
+          <p class="page-subtitle">Upload and manage medical reports. Patients get instant access.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openUploadModal()">+ Upload Report</button>
+      </div>
+
+      <div class="grid-2 mb-3">
+        <div class="stat-card"><div class="stat-icon blue">📄</div><div class="stat-number" id="totalReports">0</div><div class="stat-label">Total Reports</div></div>
+        <div class="stat-card"><div class="stat-icon green">✓</div><div class="stat-number" id="uploadedReports">0</div><div class="stat-label">Uploaded</div></div>
+      </div>
+
+      <div class="card" id="reportsTable"></div>
+    </div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div class="modal-overlay" id="uploadModal">
+    <div class="modal">
+      <h2 class="modal-title">Upload Patient Report</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Patient</label>
+          <select id="rPatient"><option value="">Select patient...</option></select>
+        </div>
+        <div class="form-group">
+          <label>Doctor</label>
+          <select id="rDoctor"><option value="">Select doctor...</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Report Type</label><input type="text" id="rType" placeholder="e.g. Blood Test, X-Ray, MRI, ECG"></div>
+      <div class="form-group"><label>Notes / Findings</label><textarea id="rNotes" placeholder="Findings, observations..."></textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeUploadModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="uploadReport()">Upload Report</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _reportHospitalId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'manager') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+      _reportHospitalId = profile.hospitalId || '';
+
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+
+      populateReportOptions();
+      renderReports();
+      DB.subscribe(renderReports);
+    })();
+
+    function populateReportOptions() {
+      const patients = DB.getPatientsByHospital(_reportHospitalId);
+      const pSel = document.getElementById('rPatient');
+      pSel.innerHTML = '<option value="">Select patient...</option>';
+      const listP = patients.length > 0 ? patients : DB.patients;
+      listP.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name + ' (' + p.id + ')'; pSel.appendChild(o); });
+
+      const doctors = DB.getDoctorsByHospital(_reportHospitalId);
+      const dSel = document.getElementById('rDoctor');
+      dSel.innerHTML = '<option value="">Select doctor...</option>';
+      const listD = doctors.length > 0 ? doctors : DB.doctors;
+      listD.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name; dSel.appendChild(o); });
+    }
+
+    function renderReports() {
+      let reports = DB.reports.filter(r => r.hospitalId === _reportHospitalId || !r.hospitalId);
+      const total = reports.length;
+      document.getElementById('totalReports').textContent = total;
+      document.getElementById('uploadedReports').textContent = reports.filter(r => r.status === 'uploaded').length;
+
+      const container = document.getElementById('reportsTable');
+      if (reports.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:3rem;"><p style="color:#6b7280;">No reports uploaded yet.</p></div>';
+        return;
+      }
+      let html = `<table><thead><tr><th>Patient</th><th>ID</th><th>Doctor</th><th>Type</th><th>Date</th><th>Status</th></tr></thead><tbody>`;
+      reports.forEach(r => {
+        const pat = DB.getPatient(r.patientId);
+        const doc = DB.getDoctor(r.doctorId);
+        html += `<tr>
+          <td><strong>${pat ? pat.name : r.patientId}</strong></td>
+          <td style="font-size:0.8rem;color:#6b7280;">${r.patientId}</td>
+          <td>${doc ? doc.name : '-'}</td>
+          <td>${r.type}</td>
+          <td>${r.date || '-'}</td>
+          <td><span class="badge badge-success">Uploaded</span></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function uploadReport() {
+      const pid = document.getElementById('rPatient').value;
+      const did = document.getElementById('rDoctor').value;
+      const type = document.getElementById('rType').value.trim();
+      const notes = document.getElementById('rNotes').value.trim();
+
+      if (!pid || !type) { alert('Please fill patient and report type'); return; }
+
+      const reportObj = {
+        id: DB.generateId('rep'),
+        patientId: pid,
+        doctorId: did,
+        hospitalId: _reportHospitalId,
+        type,
+        date: DB.formatDate(new Date()),
+        status: 'uploaded',
+        notes
+      };
+
+      DB.reports.push(reportObj);
+      DB.notifyChange();
+      if (typeof FirestoreService !== 'undefined') FirestoreService.save('reports', reportObj);
+
+      document.getElementById('rType').value = '';
+      document.getElementById('rNotes').value = '';
+      closeUploadModal();
+      renderReports();
+      alert('Report uploaded successfully!');
+    }
+
+    function openUploadModal() {
+      populateReportOptions();
+      document.getElementById('uploadModal').classList.add('show');
+    }
+    
+    function closeUploadModal() {
+      document.getElementById('uploadModal').classList.remove('show');
+    }
+  </script>
+
+</body>
+</html>

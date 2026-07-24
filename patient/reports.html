@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Reports — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="billing.html">Bills</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="reports.html" class="active">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">User</span>
+      <div class="nav-avatar" id="navAvatar">U</div>
+      <a href="../index.html" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')" style="margin-left:0.75rem;font-size:0.8rem;color:#9ca3af;text-decoration:none;cursor:pointer;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="main-content" style="max-width:1000px;margin:0 auto;">
+      <h1 class="page-title">My Medical Reports</h1>
+      <p class="page-subtitle">View and access medical test reports uploaded by your doctors.</p>
+
+      <div id="loadingOverlay" style="text-align:center;padding:3rem;">Loading...</div>
+      <div id="pageContent" style="display:none;">
+
+      <!-- Patient ID card -->
+      <div class="profile-card">
+        <div class="profile-avatar" id="profileAvatar">--</div>
+        <div class="profile-info">
+          <h3 id="profileName">Loading...</h3>
+          <p id="profileDetail">Loading...</p>
+        </div>
+      </div>
+
+      <!-- Reports Table -->
+      <div class="card" id="reportsContainer">
+        <p style="text-align:center;padding:2rem;color:#6b7280;">Loading...</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'patient') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+
+      const patientId = profile.patientId || ('P-' + profile.uid.slice(0,6).toUpperCase());
+      const patient = DB.getPatient(patientId);
+
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+      document.getElementById('profileAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+      document.getElementById('profileName').textContent = profile.name;
+      document.getElementById('profileDetail').textContent = 'Patient ID: ' + patientId + (patient ? ' • Blood Group: ' + (patient.bloodGroup || 'A+') : '');
+
+      renderReports(patientId);
+      DB.subscribe(() => renderReports(patientId));
+    })();
+
+    function renderReports(patientId) {
+      let reports = DB.getReportsByPatient(patientId);
+      if (reports.length === 0) reports = DB.reports;
+
+      const container = document.getElementById('reportsContainer');
+      if (reports.length === 0) {
+        container.innerHTML = '<p style="text-align:center;padding:2.5rem;color:#6b7280;">No reports found for your account.</p>';
+      } else {
+        let html = '<table><thead><tr><th>Date</th><th>Hospital</th><th>Doctor</th><th>Report Type</th><th>Action</th></tr></thead><tbody>';
+        reports.forEach(r => {
+          const hosp = DB.getHospital(r.hospitalId);
+          const doc = DB.getDoctor(r.doctorId);
+          html += '<tr>' +
+            '<td>' + (r.date || 'Today') + '</td>' +
+            '<td>' + (hosp ? hosp.name : 'Hospital') + '</td>' +
+            '<td>' + (doc ? doc.name : 'Dr. Consultant') + '</td>' +
+            '<td><strong>' + r.type + '</strong></td>' +
+            '<td><a href="#" onclick="alert(\'Downloading Report: ' + r.type + '\');return false;" class="btn btn-primary btn-sm">📄 View / Download</a></td>' +
+          '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      }
+
+      document.getElementById('loadingOverlay').style.display = 'none';
+      document.getElementById('pageContent').style.display = 'block';
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hospital Dashboard — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html" class="active">Dashboard</a></li>
+      <li><a href="doctors.html">Doctors</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="billing.html">Billing</a></li>
+      <li><a href="inventory.html">Inventory</a></li>
+      <li><a href="beds.html">Beds</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">Hospital</span>
+      <div class="nav-avatar" id="navAvatar">H</div>
+      <a href="#" onclick="openEditHospModal()" style="margin-left:0.75rem;font-size:0.85rem;color:#1a56db;text-decoration:none;font-weight:500;">⚙️ Edit Hospital</a>
+      <a href="../index.html" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')" style="margin-left:0.75rem;font-size:0.85rem;color:#dc2626;text-decoration:none;font-weight:500;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="main-content" id="app" style="max-width:1150px;margin:0 auto;padding:2rem;">
+    <div class="flex-between mb-2">
+      <div>
+        <h1 class="page-title" id="hospName">Hospital Dashboard</h1>
+        <p class="page-subtitle" style="margin-bottom:0;" id="hospInfo">Loading...</p>
+      </div>
+      <div class="flex gap-1" style="align-items:center;">
+        <button class="btn btn-outline btn-sm" onclick="openEditHospModal()">✏️ Edit Details</button>
+        <span class="badge badge-success" id="hospBadge" style="font-size:0.9rem;padding:0.4rem 1rem;">✓ Approved & Active</span>
+      </div>
+    </div>
+
+    <div class="grid-4 mb-3" id="statsRow"></div>
+
+    <div id="alertsContainer"></div>
+
+    <div class="grid-2">
+      <div class="card" id="recentApptsCard">
+        <div class="card-header">
+          <h3 class="card-title">Recent Appointments</h3>
+          <a href="appointments.html" style="font-size:0.85rem;color:#1a56db;">View All &rarr;</a>
+        </div>
+        <div id="recentApptsTable"></div>
+      </div>
+      <div class="card" id="stockAlertsCard">
+        <div class="card-header">
+          <h3 class="card-title">Low Stock Alerts</h3>
+          <a href="inventory.html" style="font-size:0.85rem;color:#1a56db;">Manage Inventory &rarr;</a>
+        </div>
+        <div id="stockAlertsTable"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Hospital Details Modal -->
+  <div class="modal-overlay" id="editHospModal">
+    <div class="modal">
+      <h2 class="modal-title">Edit Hospital Profile</h2>
+      <div class="form-group">
+        <label>Hospital Name</label>
+        <input type="text" id="ehName">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type</label>
+          <select id="ehType">
+            <option>Multi-Specialty</option>
+            <option>Super Specialty</option>
+            <option>General Hospital</option>
+            <option>Clinic</option>
+            <option>Nursing Home</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Total Beds</label>
+          <input type="number" id="ehBeds">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Full Address</label>
+        <input type="text" id="ehAddr">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" id="ehPhone">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="ehEmail">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeEditHospModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveHospitalProfile()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _hospitalId = '';
+    let _userProfile = null;
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'manager') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+
+      _userProfile = profile;
+      _hospitalId = profile.hospitalId || '';
+
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+
+      renderDashboard();
+      DB.subscribe(renderDashboard);
+    })();
+
+    function renderDashboard() {
+      let hosp = DB.getHospital(_hospitalId);
+      if (!hosp && _userProfile && _userProfile.hospitalId) {
+        hosp = DB.getHospital(_userProfile.hospitalId);
+      }
+      if (!hosp && _userProfile && _userProfile.email) {
+        hosp = DB.hospitals.find(h => h.email === _userProfile.email);
+      }
+      if (!hosp && DB.hospitals.length > 0) {
+        hosp = DB.hospitals[0];
+      }
+
+      if (hosp) {
+        _hospitalId = hosp.id;
+      } else {
+        document.getElementById('app').innerHTML = `
+          <div class="card" style="padding:3rem;text-align:center;">
+            <h2>Welcome, ${_userProfile ? _userProfile.name : 'Manager'}!</h2>
+            <p style="color:#6b7280;margin:1rem 0;">No hospital record is currently bound to your account.</p>
+            <button class="btn btn-primary" onclick="openEditHospModal()">+ Register Hospital Details</button>
+          </div>`;
+        return;
+      }
+
+      document.getElementById('hospName').textContent = hosp.name;
+      document.getElementById('hospInfo').innerHTML = hosp.address + ' &bull; ' + hosp.type + ' &bull; Phone: ' + (hosp.phone || '-');
+
+      const badgeEl = document.getElementById('hospBadge');
+      if (hosp.approved) {
+        badgeEl.className = 'badge badge-success';
+        badgeEl.textContent = '✓ Approved & Active';
+      } else {
+        badgeEl.className = 'badge badge-warning';
+        badgeEl.textContent = '⏳ Pending Admin Approval';
+      }
+
+      const doctors = DB.getDoctorsByHospital(_hospitalId);
+      const appts = DB.getAppointmentsByHospital(_hospitalId);
+      const meds = DB.getMedicinesByHospital(_hospitalId);
+
+      document.getElementById('statsRow').innerHTML = `
+        <div class="stat-card"><div class="stat-icon blue">👨‍⚕️</div><div class="stat-number">${doctors.length}</div><div class="stat-label">Total Doctors</div></div>
+        <div class="stat-card"><div class="stat-icon green">📅</div><div class="stat-number">${appts.filter(a => a.status !== 'completed' && a.status !== 'cancelled').length}</div><div class="stat-label">Active Appointments</div></div>
+        <div class="stat-card"><div class="stat-icon yellow">📦</div><div class="stat-number">${meds.length}</div><div class="stat-label">Medicines in Stock</div></div>
+        <div class="stat-card"><div class="stat-icon red">🚨</div><div class="stat-number">${appts.filter(a => a.priority === 'high' && a.status !== 'completed').length}</div><div class="stat-label">Critical Patients</div></div>
+      `;
+
+      const lowStock = meds.filter(m => m.stock <= m.minStock);
+      const alertsHtml = [];
+      if (!hosp.approved) {
+        alertsHtml.push(`<div class="alert alert-warning"><strong>⏳ Pending Approval:</strong> Your hospital registration is under Super Admin review. Patients will be able to book appointments as soon as it is approved.</div>`);
+      }
+      if (lowStock.length) {
+        alertsHtml.push(`<div class="alert alert-warning"><strong>⚠️ Stock Alert:</strong> ${lowStock.length} medicine(s) running low. <a href="inventory.html" style="color:#1a56db;font-weight:600;">Reorder &rarr;</a></div>`);
+      }
+      document.getElementById('alertsContainer').innerHTML = alertsHtml.join('');
+
+      const recentAppts = appts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+      document.getElementById('recentApptsTable').innerHTML = recentAppts.length ? `
+        <table><thead><tr><th>Patient</th><th>Doctor</th><th>Time</th><th>Priority</th><th>Status</th></tr></thead><tbody>
+        ${recentAppts.map(a => {
+          const pat = DB.getPatient(a.patientId); const doc = DB.getDoctor(a.doctorId);
+          return `<tr>
+            <td><strong>${pat ? pat.name : a.patientName || a.patientId}</strong></td>
+            <td>${doc ? doc.name : a.doctorName || '-'}</td>
+            <td>${a.time}</td>
+            <td>${DB.getPriorityLabel(a.priority)}</td>
+            <td><span class="badge ${DB.getStatusColor(a.status)}">${a.status}</span></td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>` : '<p style="color:#6b7280;padding:1.5rem;text-align:center;">No appointments yet.</p>';
+
+      const lowStockMeds = meds.filter(m => m.stock <= m.minStock).sort((a, b) => a.stock - b.stock);
+      document.getElementById('stockAlertsTable').innerHTML = lowStockMeds.length ? `
+        <table><thead><tr><th>Medicine</th><th>Stock</th><th>Min</th><th>Status</th></tr></thead><tbody>
+        ${lowStockMeds.map(m => `<tr><td>${m.name}</td><td>${m.stock}</td><td>${m.minStock}</td><td>${DB.medStatus(m.stock, m.minStock)}</td></tr>`).join('')}
+        </tbody></table>` : '<p style="color:#6b7280;padding:1.5rem;text-align:center;">All medicines are well-stocked.</p>';
+    }
+
+    function openEditHospModal() {
+      const hosp = DB.getHospital(_hospitalId) || {};
+      document.getElementById('ehName').value = hosp.name || '';
+      document.getElementById('ehType').value = hosp.type || 'Multi-Specialty';
+      document.getElementById('ehBeds').value = hosp.beds || 100;
+      document.getElementById('ehAddr').value = hosp.address || '';
+      document.getElementById('ehPhone').value = hosp.phone || '';
+      document.getElementById('ehEmail').value = hosp.email || '';
+      document.getElementById('editHospModal').classList.add('show');
+    }
+
+    function closeEditHospModal() {
+      document.getElementById('editHospModal').classList.remove('show');
+    }
+
+    function saveHospitalProfile() {
+      const name = document.getElementById('ehName').value.trim();
+      const type = document.getElementById('ehType').value;
+      const beds = parseInt(document.getElementById('ehBeds').value) || 50;
+      const address = document.getElementById('ehAddr').value.trim();
+      const phone = document.getElementById('ehPhone').value.trim();
+      const email = document.getElementById('ehEmail').value.trim();
+
+      if (!name || !address) { alert('Please enter hospital name and address'); return; }
+
+      let hosp = DB.getHospital(_hospitalId);
+      if (hosp) {
+        hosp.name = name; hosp.type = type; hosp.beds = beds; hosp.address = address; hosp.phone = phone; hosp.email = email;
+      } else {
+        hosp = { id: _hospitalId || ('h_' + Date.now().toString(36)), name, type, beds, address, phone, email, approved: false, rating: 4.8, image: '🏥' };
+        DB.hospitals.push(hosp);
+        _hospitalId = hosp.id;
+      }
+
+      DB.notifyChange();
+      if (typeof FirestoreService !== 'undefined') FirestoreService.save('hospitals', hosp);
+
+      closeEditHospModal();
+      renderDashboard();
+      alert('Hospital profile updated successfully!');
+    }
+  </script>
+
+</body>
+</html>

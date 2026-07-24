@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedRescue — Smart Hospital Management System</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="js/firebase-init.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/firestore-service.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Home</a></li>
+      <li><a href="hospital/register.html">Register Hospital</a></li>
+    </ul>
+    <div id="navBtns" style="display:flex;gap:0.75rem;">
+      <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+      <a href="login.html" class="btn btn-primary btn-sm">Sign Up</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>Smart Healthcare.<br><span>One Connected Platform.</span></h1>
+    <p>
+      Book appointments, manage digital prescriptions, track hospital beds, handle inventory, and oversee medical operations seamlessly.
+    </p>
+    <div class="hero-buttons">
+      <a href="login.html" class="btn btn-primary btn-lg">Get Started</a>
+      <a href="admin/lobby.html" class="btn btn-outline btn-lg">Super Admin Panel</a>
+    </div>
+  </section>
+
+  <div class="page" style="padding-top:0;display:none;" id="dashLink">
+    <div class="card text-center" style="max-width:600px;margin:0 auto;padding:2rem;">
+      <h2 class="section-title" style="justify-content:center;margin-bottom:1rem;">Welcome back!</h2>
+      <p id="greeting" style="color:#6b7280;margin-bottom:1.5rem;"></p>
+      <div style="display:flex;gap:1rem;justify-content:center;">
+        <a id="gotoDash" href="#" class="btn btn-primary btn-lg">Go to Dashboard &rarr;</a>
+        <button class="btn btn-outline btn-lg" onclick="Auth.logout().then(()=>location.reload())">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="features">
+    <h2 class="text-center section-title" style="justify-content:center;margin-bottom:2rem;">Everything You Need</h2>
+    <div class="features">
+      <div class="feature card">
+        <div class="feature-icon" style="background:#dbeafe;color:#1a56db;">📋</div>
+        <h3>Online Booking</h3>
+        <p>Search registered hospitals, pick doctors, book instantly. Urgent cases flagged automatically.</p>
+      </div>
+      <div class="feature card">
+        <div class="feature-icon" style="background:#d1fae5;color:#059669;">💊</div>
+        <h3>Digital Prescriptions</h3>
+        <p>Doctors issue digital prescriptions directly to patient accounts with medicine dosages.</p>
+      </div>
+      <div class="feature card">
+        <div class="feature-icon" style="background:#ede9fe;color:#7c3aed;">📦</div>
+        <h3>Smart Inventory</h3>
+        <p>Track medicine stock in real-time with automatic low-stock notifications.</p>
+      </div>
+      <div class="feature card">
+        <div class="feature-icon" style="background:#fee2e2;color:#dc2626;">🛏️</div>
+        <h3>Bed Management</h3>
+        <p>Bed allocation and occupancy tracking across ICU, General, and Emergency wards.</p>
+      </div>
+      <div class="feature card">
+        <div class="feature-icon" style="background:#e0e7ff;color:#4338ca;">💰</div>
+        <h3>Billing & Reports</h3>
+        <p>Generate bills, upload lab reports, and process online invoice payments easily.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; 2026 MedRescue — Built for Healthcare Excellence
+  </div>
+
+  <script>
+    Auth.init().then(user => {
+      if (user && Auth.userProfile) {
+        document.getElementById('dashLink').style.display = 'block';
+        document.getElementById('greeting').textContent = 'Logged in as ' + Auth.userProfile.name + ' (' + Auth.userProfile.role.toUpperCase() + ')';
+        document.getElementById('gotoDash').href = Auth.userProfile.role === 'patient' ? 'patient/dashboard.html' : Auth.userProfile.role === 'manager' ? 'hospital/dashboard.html' : 'admin/dashboard.html';
+        document.getElementById('navBtns').style.display = 'none';
+      }
+    });
+  </script>
+
+</body>
+</html>

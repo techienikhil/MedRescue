@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Prescriptions — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="billing.html">Bills</a></li>
+      <li><a href="prescriptions.html" class="active">Prescriptions</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">User</span>
+      <div class="nav-avatar" id="navAvatar">U</div>
+      <a href="../index.html" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')" style="margin-left:0.75rem;font-size:0.8rem;color:#9ca3af;text-decoration:none;cursor:pointer;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="main-content" id="app" style="max-width:1000px;margin:0 auto;">
+      <h1 class="page-title">My Prescriptions</h1>
+      <p class="page-subtitle">View your digital prescriptions issued by doctors.</p>
+
+      <div id="prescriptionsContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    let patientId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'patient') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+
+      patientId = profile.patientId || ('P-' + profile.uid.slice(0,6).toUpperCase());
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+
+      renderPrescriptions();
+      DB.subscribe(renderPrescriptions);
+    })();
+
+    function renderPrescriptions() {
+      let prescs = DB.getPrescriptionsByPatient(patientId);
+      if (prescs.length === 0) prescs = DB.prescriptions;
+
+      const container = document.getElementById('prescriptionsContainer');
+      if (prescs.length === 0) {
+        container.innerHTML = '<div class="card text-center" style="padding:3rem;"><p style="color:#6b7280;">No prescriptions issued yet.</p></div>';
+      } else {
+        let html = '';
+        prescs.forEach(p => {
+          const doc = DB.getDoctor(p.doctorId);
+          const hosp = DB.getHospital(p.hospitalId);
+          const medsHtml = (p.medicines || []).map(m => `
+            <tr>
+              <td><strong>${m.name}</strong></td>
+              <td>${m.dosage}</td>
+              <td>${m.days} days</td>
+            </tr>`).join('');
+
+          html += `
+            <div class="card mb-2">
+              <div class="flex-between mb-2" style="border-bottom:1px solid #e5e7eb;padding-bottom:0.75rem;">
+                <div>
+                  <h3 style="font-weight:600;">👨‍⚕️ ${doc ? doc.name : 'Doctor'}</h3>
+                  <p style="font-size:0.85rem;color:#6b7280;">🏥 ${hosp ? hosp.name : 'Hospital'} &bull; ${DB.formatDate(p.date)}</p>
+                </div>
+                <span class="badge badge-success">Active</span>
+              </div>
+              <table>
+                <thead><tr><th>Medicine</th><th>Dosage</th><th>Duration</th></tr></thead>
+                <tbody>${medsHtml || '<tr><td colspan="3">General Prescription</td></tr>'}</tbody>
+              </table>
+              ${p.notes ? `<div class="mt-2" style="font-size:0.85rem;color:#4b5563;background:#f9fafb;padding:0.75rem;border-radius:6px;"><strong>Instructions:</strong> ${p.notes}</div>` : ''}
+              <div class="mt-2" style="display:flex;gap:0.5rem;">
+                <button class="btn btn-outline btn-sm" onclick="alert('Downloading Prescription PDF...')">📄 Download PDF</button>
+              </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+      }
+    }
+  </script>
+
+</body>
+</html>

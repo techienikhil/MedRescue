@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+  <style>
+    .admin-page { max-width: 1150px; margin: 2rem auto; padding: 0 1.5rem; }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links"><li><a href="dashboard.html" class="active">Super Admin Dashboard</a></li></ul>
+    <div class="nav-user">
+      <span id="navUserName">Admin</span>
+      <div class="nav-avatar" id="navAvatar">A</div>
+      <a href="#" onclick="adminLogout()" style="margin-left:0.75rem;font-size:0.85rem;color:#dc2626;text-decoration:none;font-weight:500;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="admin-page" id="app">
+    <div class="flex-between mb-2">
+      <div>
+        <h1 class="page-title">Super Admin Control Panel</h1>
+        <p class="page-subtitle" style="margin-bottom:0;">Monitor registered hospitals, review pending approvals, and manage system data.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openAddHospitalModal()">+ Add New Hospital</button>
+    </div>
+
+    <div class="grid-4 mb-3" id="statsRow"></div>
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">🔐 Admin UID Access Control</h2>
+          <p class="card-subtitle">Add a Firebase Authentication UID here. Any signed-in account with that UID will be promoted to admin automatically.</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Firebase User UID</label>
+          <input type="text" id="adminUidInput" placeholder="Paste the UID from Firebase Authentication">
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <button class="btn btn-primary" style="width:100%;" onclick="addAdminUid()">+ Add UID</button>
+        </div>
+      </div>
+      <div id="adminUidList" class="flex gap-1 flex-wrap"></div>
+    </div>
+
+    <h2 class="section-title" id="pending">⏳ Pending Approvals</h2>
+    <div class="card mb-3" id="pendingTable"></div>
+
+    <h2 class="section-title" id="hospitals">🏥 All Registered Hospitals</h2>
+    <div class="card mb-3" id="allHospitalsTable"></div>
+
+    <hr style="margin:2rem 0;">
+    <div class="flex-between flex-wrap gap-1 mb-2">
+      <div>
+        <h2 class="section-title" style="margin-bottom:0;">📂 System Data Manager</h2>
+        <p style="font-size:0.85rem;color:#6b7280;">Total cached records across system: <span id="cacheSize" style="font-weight:700;">0</span></p>
+      </div>
+      <div class="flex gap-1">
+        <button class="btn btn-outline btn-sm" onclick="refreshData()">🔄 Sync Data</button>
+        <button class="btn btn-outline btn-sm" onclick="clearCache()">🗑️ Reset Local Cache</button>
+        <button class="btn btn-primary btn-sm" onclick="toggleDataViewer()">👁️ JSON Inspector</button>
+      </div>
+    </div>
+    <div class="card" id="dataViewer" style="display:none;max-height:400px;overflow:auto;font-size:0.8rem;">
+      <pre id="dataViewerContent" style="margin:0;white-space:pre-wrap;"></pre>
+    </div>
+  </div>
+
+  <!-- Add/Edit Hospital Modal -->
+  <div class="modal-overlay" id="hospitalModal">
+    <div class="modal">
+      <h2 class="modal-title" id="hModalTitle">Add New Hospital</h2>
+      <input type="hidden" id="hEditId">
+      <div class="form-group">
+        <label>Hospital Name</label>
+        <input type="text" id="hModalName" placeholder="e.g. City General Hospital">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type</label>
+          <select id="hModalType">
+            <option>Multi-Specialty</option>
+            <option>Super Specialty</option>
+            <option>General Hospital</option>
+            <option>Clinic</option>
+            <option>Nursing Home</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Total Beds</label>
+          <input type="number" id="hModalBeds" placeholder="100">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" id="hModalAddress" placeholder="Street, City, Pincode">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" id="hModalPhone" placeholder="+91 98765 43210">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="hModalEmail" placeholder="admin@hospital.org">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeHospitalModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveHospitalDetails()">Save Hospital</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (!profile || profile.role !== 'admin') {
+        window.location.href = 'lobby.html';
+        return;
+      }
+      
+      await new Promise(resolve => DB.onReady(resolve));
+      document.getElementById('navUserName').textContent = profile.name || 'Admin';
+      document.getElementById('navAvatar').textContent = (profile.name || 'Admin').split(' ').map(w => w[0]).join('').slice(0,2);
+      renderAdminUidList();
+      render();
+      updateCacheStats();
+      
+      DB.subscribe(() => {
+        render();
+        updateCacheStats();
+      });
+    })();
+
+    function getAdminUidAllowlist() {
+      try {
+        const raw = localStorage.getItem('mr_admin_uids');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(Boolean).map(uid => String(uid).trim()) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveAdminUidAllowlist(list) {
+      localStorage.setItem('mr_admin_uids', JSON.stringify(list));
+    }
+
+    function renderAdminUidList() {
+      const container = document.getElementById('adminUidList');
+      const list = getAdminUidAllowlist();
+      if (!list.length) {
+        container.innerHTML = '<span class="badge badge-warning">No Firebase admin UIDs added yet</span>';
+        return;
+      }
+      container.innerHTML = list.map(uid => `
+        <div class="badge badge-info" style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.45rem 0.75rem;">
+          <span>${uid}</span>
+          <button class="btn btn-danger btn-sm" onclick="removeAdminUid('${uid}')">Remove</button>
+        </div>
+      `).join('');
+    }
+
+    function addAdminUid() {
+      const uid = document.getElementById('adminUidInput').value.trim();
+      if (!uid) {
+        alert('Paste a Firebase User UID first.');
+        return;
+      }
+      const list = getAdminUidAllowlist();
+      if (!list.includes(uid)) {
+        list.push(uid);
+        saveAdminUidAllowlist(list);
+      }
+      document.getElementById('adminUidInput').value = '';
+      renderAdminUidList();
+      alert('UID added to the admin allowlist. That Firebase account can now login as admin.');
+    }
+
+    function removeAdminUid(uid) {
+      const list = getAdminUidAllowlist().filter(item => item !== uid);
+      saveAdminUidAllowlist(list);
+      renderAdminUidList();
+    }
+
+    function updateCacheStats() {
+      const total = DB.hospitals.length + DB.doctors.length + DB.patients.length + DB.appointments.length +
+        DB.medicines.length + DB.bills.length + DB.reports.length + DB.beds.length + DB.prescriptions.length;
+      document.getElementById('cacheSize').textContent = total;
+      document.getElementById('dataViewerContent').textContent = JSON.stringify({
+        hospitals: DB.hospitals, doctors: DB.doctors, patients: DB.patients,
+        appointments: DB.appointments, medicines: DB.medicines,
+        bills: DB.bills, reports: DB.reports, beds: DB.beds,
+        prescriptions: DB.prescriptions
+      }, null, 2);
+    }
+
+    function refreshData() {
+      if (typeof FirestoreService !== 'undefined') {
+        FirestoreService.loadAll().then(() => {
+          DB.notifyChange();
+          alert('Data synced with cloud storage!');
+        });
+      } else {
+        DB.notifyChange();
+      }
+    }
+
+    function clearCache() {
+      if (confirm('Clear local database cache? Fresh defaults will reload.')) {
+        localStorage.removeItem('mr_db_cache');
+        location.reload();
+      }
+    }
+
+    function toggleDataViewer() {
+      const el = document.getElementById('dataViewer');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function render() {
+      const allH = DB.hospitals;
+      const approved = allH.filter(h => h.approved);
+      const pending = allH.filter(h => !h.approved);
+
+      document.getElementById('statsRow').innerHTML = `
+        <div class="stat-card"><div class="stat-icon blue">🏥</div><div class="stat-number">${allH.length}</div><div class="stat-label">Total Hospitals</div></div>
+        <div class="stat-card"><div class="stat-icon green">✓</div><div class="stat-number">${approved.length}</div><div class="stat-label">Active & Approved</div></div>
+        <div class="stat-card"><div class="stat-icon yellow">⏳</div><div class="stat-number">${pending.length}</div><div class="stat-label">Pending Approval</div></div>
+        <div class="stat-card"><div class="stat-icon purple">👥</div><div class="stat-number">${DB.patients.length}</div><div class="stat-label">Total Patients</div></div>
+      `;
+
+      // Pending table
+      const penContainer = document.getElementById('pendingTable');
+      if (pending.length === 0) {
+        penContainer.innerHTML = '<p style="padding:1.5rem;color:#6b7280;text-align:center;">No pending approvals. All hospitals are approved and active.</p>';
+      } else {
+        let html = `<table><thead><tr><th>Hospital</th><th>Contact</th><th>Location</th><th>Type</th><th>Beds</th><th>Actions</th></tr></thead><tbody>`;
+        pending.forEach(h => {
+          html += `<tr>
+            <td><strong>${h.name}</strong></td>
+            <td style="font-size:0.85rem;">${h.phone || '-'}<br>${h.email || '-'}</td>
+            <td>${h.address}</td>
+            <td>${h.type}</td>
+            <td>${h.beds}</td>
+            <td>
+              <button class="btn btn-success btn-sm" onclick="approveHospital('${h.id}')">✓ Approve</button>
+              <button class="btn btn-outline btn-sm" onclick="editHospital('${h.id}')">✏️ Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectHospital('${h.id}')">Reject</button>
+            </td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        penContainer.innerHTML = html;
+      }
+
+      // All hospitals table
+      const allContainer = document.getElementById('allHospitalsTable');
+      if (allH.length === 0) {
+        allContainer.innerHTML = '<p style="padding:2rem;text-align:center;color:#6b7280;">No hospitals registered yet. Click "+ Add New Hospital" to register one.</p>';
+      } else {
+        let html2 = `<table><thead><tr><th>Hospital</th><th>Location</th><th>Status</th><th>Contact</th><th>Beds</th><th>Actions</th></tr></thead><tbody>`;
+        allH.forEach(h => {
+          const docCount = DB.getDoctorsByHospital(h.id).length;
+          html2 += `<tr>
+            <td><strong>${h.name}</strong><br><span style="font-size:0.8rem;color:#6b7280;">${docCount} Doctor(s) registered</span></td>
+            <td>${h.address}</td>
+            <td><span class="badge ${h.approved ? 'badge-success' : 'badge-warning'}">${h.approved ? 'Approved' : 'Pending'}</span></td>
+            <td style="font-size:0.85rem;">${h.phone || '-'}<br>${h.email || '-'}</td>
+            <td>${h.beds}</td>
+            <td>
+              ${!h.approved ? `<button class="btn btn-success btn-sm" onclick="approveHospital('${h.id}')">Approve</button> ` : ''}
+              <button class="btn btn-outline btn-sm" onclick="editHospital('${h.id}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectHospital('${h.id}')">Delete</button>
+            </td>
+          </tr>`;
+        });
+        html2 += '</tbody></table>';
+        allContainer.innerHTML = html2;
+      }
+    }
+
+    async function approveHospital(hId) {
+      const h = DB.getHospital(hId);
+      if (!h) return;
+      h.approved = true;
+      DB.notifyChange();
+
+      if (typeof FirestoreService !== 'undefined') {
+        try { await FirestoreService.save('hospitals', h); } catch(e) {}
+      }
+      try {
+        if (typeof db !== 'undefined') {
+          const usersSnap = await db.collection('users').where('hospitalId', '==', hId).get();
+          usersSnap.forEach(doc => { doc.ref.update({ status: 'approved' }); });
+        }
+      } catch(e) {}
+      
+      render();
+      alert('Hospital "' + h.name + '" has been approved successfully!');
+    }
+
+    async function rejectHospital(hId) {
+      const h = DB.getHospital(hId);
+      if (!h || !confirm('Delete hospital "' + (h.name || hId) + '"?')) return;
+      
+      const idx = DB.hospitals.findIndex(item => item.id === hId);
+      if (idx > -1) DB.hospitals.splice(idx, 1);
+      DB.notifyChange();
+
+      if (typeof FirestoreService !== 'undefined') {
+        try { await FirestoreService.remove('hospitals', hId); } catch(e) {}
+      }
+      render();
+    }
+
+    function openAddHospitalModal() {
+      document.getElementById('hModalTitle').textContent = 'Add New Hospital';
+      document.getElementById('hEditId').value = '';
+      document.getElementById('hModalName').value = '';
+      document.getElementById('hModalAddress').value = '';
+      document.getElementById('hModalPhone').value = '';
+      document.getElementById('hModalEmail').value = '';
+      document.getElementById('hModalBeds').value = '100';
+      document.getElementById('hospitalModal').classList.add('show');
+    }
+
+    function editHospital(hId) {
+      const h = DB.getHospital(hId);
+      if (!h) return;
+      document.getElementById('hModalTitle').textContent = 'Edit Hospital Details';
+      document.getElementById('hEditId').value = h.id;
+      document.getElementById('hModalName').value = h.name || '';
+      document.getElementById('hModalAddress').value = h.address || '';
+      document.getElementById('hModalPhone').value = h.phone || '';
+      document.getElementById('hModalEmail').value = h.email || '';
+      document.getElementById('hModalType').value = h.type || 'Multi-Specialty';
+      document.getElementById('hModalBeds').value = h.beds || 100;
+      document.getElementById('hospitalModal').classList.add('show');
+    }
+
+    function closeHospitalModal() {
+      document.getElementById('hospitalModal').classList.remove('show');
+    }
+
+    function saveHospitalDetails() {
+      const editId = document.getElementById('hEditId').value;
+      const name = document.getElementById('hModalName').value.trim();
+      const address = document.getElementById('hModalAddress').value.trim();
+      const phone = document.getElementById('hModalPhone').value.trim();
+      const email = document.getElementById('hModalEmail').value.trim();
+      const type = document.getElementById('hModalType').value;
+      const beds = parseInt(document.getElementById('hModalBeds').value) || 50;
+
+      if (!name || !address) {
+        alert('Please fill hospital name and address.');
+        return;
+      }
+
+      if (editId) {
+        const h = DB.getHospital(editId);
+        if (h) {
+          h.name = name;
+          h.address = address;
+          h.phone = phone;
+          h.email = email;
+          h.type = type;
+          h.beds = beds;
+          if (typeof FirestoreService !== 'undefined') FirestoreService.save('hospitals', h);
+        }
+      } else {
+        const newHosp = {
+          id: 'h_' + Date.now().toString(36),
+          name, address, phone, email, type, beds,
+          approved: true, rating: 5.0, image: '🏥'
+        };
+        DB.hospitals.push(newHosp);
+        if (typeof FirestoreService !== 'undefined') FirestoreService.save('hospitals', newHosp);
+      }
+
+      DB.notifyChange();
+      closeHospitalModal();
+      render();
+    }
+
+    function adminLogout() {
+      localStorage.removeItem('mr_admin');
+      if (typeof Auth !== 'undefined') Auth.logout().catch(() => {});
+      window.location.href = '../index.html';
+    }
+  </script>
+
+</body>
+</html>

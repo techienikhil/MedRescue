@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bed Management — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="doctors.html">Doctors</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="billing.html">Billing</a></li>
+      <li><a href="inventory.html">Inventory</a></li>
+      <li><a href="beds.html" class="active">Beds</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">Hospital</span>
+      <div class="nav-avatar" id="navAvatar">H</div>
+    </div>
+  </nav>
+
+  <div class="sidebar-layout">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Hospital Panel</div>
+        <a href="dashboard.html" class="sidebar-item"><span class="sidebar-icon">📊</span> Dashboard</a>
+        <a href="doctors.html" class="sidebar-item"><span class="sidebar-icon">👨‍⚕️</span> Doctors</a>
+        <a href="appointments.html" class="sidebar-item"><span class="sidebar-icon">📅</span> Appointments</a>
+        <a href="prescriptions.html" class="sidebar-item"><span class="sidebar-icon">💊</span> Prescriptions</a>
+        <a href="billing.html" class="sidebar-item"><span class="sidebar-icon">💰</span> Billing</a>
+        <a href="inventory.html" class="sidebar-item"><span class="sidebar-icon">📦</span> Inventory</a>
+        <a href="beds.html" class="sidebar-item active"><span class="sidebar-icon">🛏️</span> Bed Management</a>
+        <a href="reports.html" class="sidebar-item"><span class="sidebar-icon">📄</span> Reports</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Account</div>
+        <a href="../index.html" class="sidebar-item" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')"><span class="sidebar-icon">🚪</span> Logout</a>
+      </div>
+    </div>
+
+    <div class="main-content" id="app">
+      <div class="flex-between mb-2">
+        <div>
+          <h1 class="page-title">Bed Management</h1>
+          <p class="page-subtitle">Track bed occupancy, allocate beds, and manage wards.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openAddBedModal()">+ Add Bed</button>
+      </div>
+
+      <div class="grid-4 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon blue">🛏️</div>
+          <div class="stat-number" id="totalBeds">0</div>
+          <div class="stat-label">Total Beds</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">✓</div>
+          <div class="stat-number" id="availBeds">0</div>
+          <div class="stat-label">Available</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red">🚨</div>
+          <div class="stat-number" id="occBeds">0</div>
+          <div class="stat-label">Occupied</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow" id="occPercentCard">📊</div>
+          <div class="stat-number" id="occPercent">0%</div>
+          <div class="stat-label">Occupancy Rate</div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="filterBeds('all',this)">All Beds</button>
+        <button class="tab" onclick="filterBeds('available',this)">Available</button>
+        <button class="tab" onclick="filterBeds('occupied',this)">Occupied</button>
+      </div>
+
+      <div class="grid-3" id="bedGrid"></div>
+    </div>
+  </div>
+
+  <!-- Add Bed Modal -->
+  <div class="modal-overlay" id="addBedModal">
+    <div class="modal">
+      <h2 class="modal-title">Add New Bed</h2>
+      <div class="form-row">
+        <div class="form-group"><label>Bed Number</label><input type="text" id="bedNumber" placeholder="e.g. ICU-03"></div>
+        <div class="form-group"><label>Ward</label>
+          <select id="bedWard"><option>ICU</option><option>General</option><option>Emergency</option><option>Private</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label>Price per Day (₹)</label><input type="number" id="bedPrice" placeholder="2000"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeAddBedModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="addBed()">Add Bed</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let beds = [];
+    let _hospitalId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'manager') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+      _hospitalId = profile.hospitalId || '';
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+      renderBeds('all');
+      DB.subscribe(() => renderBeds('all'));
+    })();
+
+    function renderBeds(filter = 'all') {
+      beds = DB.getBedsByHospital(_hospitalId);
+      if (beds.length === 0 && DB.beds.length > 0) beds = DB.beds;
+
+      const total = beds.length;
+      const avail = beds.filter(b => b.status === 'available').length;
+      const occ = beds.filter(b => b.status === 'occupied').length;
+      document.getElementById('totalBeds').textContent = total;
+      document.getElementById('availBeds').textContent = avail;
+      document.getElementById('occBeds').textContent = occ;
+      document.getElementById('occPercent').textContent = total > 0 ? Math.round((occ / total) * 100) + '%' : '0%';
+
+      const grid = document.getElementById('bedGrid');
+      const filtered = beds.filter(b => filter === 'all' || b.status === filter);
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div class="card text-center" style="grid-column:1/-1;padding:3rem;"><p style="color:#6b7280;">No beds found. Click "+ Add Bed" to get started.</p></div>';
+        return;
+      }
+      let html = '';
+      filtered.forEach(b => {
+        const patient = b.patientId ? DB.getPatient(b.patientId) : null;
+        html += `
+          <div class="card ${b.status === 'occupied' ? 'priority-high' : ''}" style="text-align:center;">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">${b.status === 'occupied' ? '🛌' : '🟢'}</div>
+            <h3 style="font-weight:600;">${b.number}</h3>
+            <p style="font-size:0.85rem;color:#6b7280;">${b.ward} Ward &bull; ₹${b.pricePerDay || 2000}/day</p>
+            <div class="mt-1">
+              <span class="badge ${b.status === 'occupied' ? 'badge-danger' : 'badge-success'}">${b.status.toUpperCase()}</span>
+            </div>
+            ${patient ? '<p style="font-size:0.85rem;color:#4b5563;margin-top:0.5rem;"><strong>Patient:</strong> ' + patient.name + '</p>' : ''}
+            <div class="mt-2">
+              ${b.status === 'available' 
+                ? '<button class="btn btn-success btn-sm" onclick="allocateBed(\'' + b.id + '\')">Allocate Bed</button>' 
+                : '<button class="btn btn-outline btn-sm" onclick="freeBed(\'' + b.id + '\')">Free Bed</button>'}
+            </div>
+          </div>`;
+      });
+      grid.innerHTML = html;
+    }
+
+    function allocateBed(bedId) {
+      const bed = DB.beds.find(b => b.id === bedId);
+      const pid = prompt('Enter Patient Name or Patient ID to assign bed:');
+      if (bed && pid) {
+        bed.status = 'occupied';
+        bed.patientId = pid;
+        bed.assignedAt = new Date().toISOString().split('T')[0];
+        DB.notifyChange();
+        if (typeof FirestoreService !== 'undefined') FirestoreService.save('beds', bed);
+        renderBeds();
+      }
+    }
+
+    function freeBed(bedId) {
+      const bed = DB.beds.find(b => b.id === bedId);
+      if (bed) {
+        bed.status = 'available';
+        bed.patientId = null;
+        bed.assignedAt = null;
+        DB.notifyChange();
+        if (typeof FirestoreService !== 'undefined') FirestoreService.save('beds', bed);
+        renderBeds();
+      }
+    }
+
+    function filterBeds(filter, btn) {
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      renderBeds(filter);
+    }
+
+    function openAddBedModal() { document.getElementById('addBedModal').classList.add('show'); }
+    function closeAddBedModal() { document.getElementById('addBedModal').classList.remove('show'); }
+
+    function addBed() {
+      const number = document.getElementById('bedNumber').value.trim();
+      if (!number) { alert('Please enter bed number'); return; }
+      const ward = document.getElementById('bedWard').value;
+      const price = parseInt(document.getElementById('bedPrice').value) || 2000;
+      const bed = {
+        id: DB.generateId('bed'),
+        number: number,
+        ward: ward,
+        status: 'available',
+        hospitalId: _hospitalId,
+        pricePerDay: price
+      };
+      DB.beds.push(bed);
+      DB.notifyChange();
+      if (typeof FirestoreService !== 'undefined') FirestoreService.save('beds', bed);
+
+      document.getElementById('bedNumber').value = '';
+      closeAddBedModal();
+      renderBeds();
+    }
+  </script>
+
+</body>
+</html>

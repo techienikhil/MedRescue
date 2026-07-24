@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Dashboard — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html" class="active">Dashboard</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="billing.html">Bills</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">User</span>
+      <div class="nav-avatar" id="navAvatar">U</div>
+      <a href="../index.html" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')" style="margin-left:0.75rem;font-size:0.8rem;color:#9ca3af;text-decoration:none;cursor:pointer;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="main-content" id="app" style="max-width:1050px;margin:0 auto;">
+      <div id="loadingOverlay" style="text-align:center;padding:3rem;">Loading...</div>
+      <div id="pageContent" style="display:none;">
+      <h1 class="page-title" id="pageTitle">Welcome!</h1>
+      <p class="page-subtitle">Track your active hospital visits, doctors, medical history, and book appointments.</p>
+
+      <div class="grid-4 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon blue">📅</div>
+          <div class="stat-number" id="upcomingAppts">0</div>
+          <div class="stat-label">Upcoming Appointments</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">✓</div>
+          <div class="stat-number" id="completedAppts">0</div>
+          <div class="stat-label">Completed Visits</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon yellow">📄</div>
+          <div class="stat-number" id="reportCount">0</div>
+          <div class="stat-label">Medical Reports</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple">💊</div>
+          <div class="stat-number" id="prescriptionCount">0</div>
+          <div class="stat-label">Active Prescriptions</div>
+        </div>
+      </div>
+
+      <!-- Active Hospitals Banner / Section -->
+      <div id="activeHospitalsSection" style="margin-bottom:2.5rem;"></div>
+
+      <div class="flex-between mb-1">
+        <h2 class="section-title">🏥 Explore All Registered Hospitals</h2>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Search hospital by name, city, or specialty..." id="hospitalSearch" oninput="searchHospitals()">
+      </div>
+
+      <div class="grid-2" id="hospitalList"></div>
+    </div>
+  </div>
+
+  <script>
+    let patientId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'patient') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+
+      patientId = profile.patientId || ('P-' + profile.uid.slice(0,6).toUpperCase());
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+      document.getElementById('pageTitle').textContent = 'Welcome, ' + profile.name.split(' ')[0] + '!';
+
+      renderDashboard();
+      DB.subscribe(renderDashboard);
+
+      document.getElementById('loadingOverlay').style.display = 'none';
+      document.getElementById('pageContent').style.display = 'block';
+    })();
+
+    function renderDashboard() {
+      const appts = DB.getAppointmentsByPatient(patientId);
+      const reports = DB.getReportsByPatient(patientId);
+      const prescs = DB.getPrescriptionsByPatient(patientId);
+      const bills = DB.getBillsByPatient(patientId);
+
+      document.getElementById('upcomingAppts').textContent = appts.filter(a => a.status !== 'completed' && a.status !== 'cancelled').length;
+      document.getElementById('completedAppts').textContent = appts.filter(a => a.status === 'completed').length;
+      document.getElementById('reportCount').textContent = reports.length;
+      document.getElementById('prescriptionCount').textContent = prescs.length;
+
+      // Extract Active Hospital IDs
+      const activeHospIds = [...new Set([
+        ...appts.map(a => a.hospitalId),
+        ...reports.map(r => r.hospitalId),
+        ...prescs.map(p => p.hospitalId),
+        ...bills.map(b => b.hospitalId)
+      ])].filter(id => id);
+
+      renderActiveHospitals(activeHospIds, appts, prescs, bills, reports);
+
+      const q = document.getElementById('hospitalSearch') ? document.getElementById('hospitalSearch').value.toLowerCase().trim() : '';
+      renderHospitals(q);
+    }
+
+    function renderActiveHospitals(hospIds, appts, prescs, bills, reports) {
+      const section = document.getElementById('activeHospitalsSection');
+      if (!hospIds || hospIds.length === 0) {
+        section.innerHTML = '';
+        return;
+      }
+
+      let html = `<h2 class="section-title" style="color:#1a56db;">🌟 My Active Hospital Connections</h2>`;
+
+      hospIds.forEach(hId => {
+        const hosp = DB.getHospital(hId);
+        if (!hosp) return;
+
+        const hDoctors = DB.getDoctorsByHospital(hId);
+        const hBeds = DB.getBedsByHospital(hId);
+        const availBeds = hBeds.filter(b => b.status === 'available').length;
+        const totalBeds = hBeds.length || hosp.beds || 50;
+
+        const myHospAppts = appts.filter(a => a.hospitalId === hId);
+        const myHospPrescs = prescs.filter(p => p.hospitalId === hId);
+        const myHospBills = bills.filter(b => b.hospitalId === hId);
+        const myHospReports = reports.filter(r => r.hospitalId === hId);
+
+        html += `
+          <div class="card mb-3" style="border:2px solid #3b82f6;background:#f0f7ff;">
+            <div class="flex-between mb-2 flex-wrap gap-1">
+              <div>
+                <span class="badge badge-info mb-1">Active Patient Connection</span>
+                <h2 style="font-size:1.35rem;font-weight:700;color:#1e3a8a;">🏥 ${hosp.name}</h2>
+                <p style="font-size:0.9rem;color:#4b5563;">📍 ${hosp.address || 'Central'} &bull; 📞 ${hosp.phone || '-'} &bull; ✉️ ${hosp.email || '-'}</p>
+              </div>
+              <div style="text-align:right;">
+                <span class="badge badge-success" style="font-size:0.85rem;padding:0.35rem 0.85rem;">${hosp.type || 'Multi-Specialty'}</span>
+                <p style="font-size:0.85rem;color:#4b5563;margin-top:0.35rem;">🛏️ <strong>${availBeds} Available Beds</strong> / ${totalBeds} Total</p>
+              </div>
+            </div>
+
+            <!-- Active Records Summary Bar -->
+            <div style="background:#fff;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.85rem;border:1px solid #dbeafe;">
+              <span>📅 Appointments: <strong>${myHospAppts.length}</strong></span>
+              <span>💊 Prescriptions: <strong>${myHospPrescs.length}</strong></span>
+              <span>📄 Reports: <strong>${myHospReports.length}</strong></span>
+              <span>💰 Invoices: <strong>${myHospBills.length}</strong></span>
+            </div>
+
+            <!-- Hospital Doctors & Public Info -->
+            <h4 style="font-weight:600;margin-bottom:0.5rem;font-size:0.95rem;color:#1e40af;">👨‍⚕️ Available Hospital Specialists</h4>
+            <div class="grid-2 mb-2" style="gap:0.75rem;">
+              ${hDoctors.map(d => `
+                <div style="background:#fff;border-radius:8px;padding:0.75rem;border:1px solid #e5e7eb;font-size:0.85rem;">
+                  <div class="flex-between">
+                    <strong>${d.name}</strong>
+                    <span class="badge badge-info">Fee: ₹${d.fee}</span>
+                  </div>
+                  <p style="color:#6b7280;margin-top:0.2rem;">${d.specialty} (${d.qualification || 'MBBS'})</p>
+                  <p style="color:#6b7280;font-size:0.8rem;">📅 ${d.days || 'Mon-Sat'} &bull; 🕒 ${d.timing || '9 AM - 5 PM'}</p>
+                </div>
+              `).join('') || '<p style="color:#6b7280;font-size:0.85rem;">Consultants on call.</p>'}
+            </div>
+
+            <!-- Direct Quick Action Links -->
+            <div class="flex gap-1 flex-wrap">
+              <a href="appointments.html?hospital=${hosp.id}" class="btn btn-primary btn-sm">📅 Book Appointment</a>
+              <a href="prescriptions.html" class="btn btn-outline btn-sm">💊 View My Prescriptions</a>
+              <a href="billing.html" class="btn btn-outline btn-sm">💰 View My Bills</a>
+              <a href="reports.html" class="btn btn-outline btn-sm">📄 View Lab Reports</a>
+            </div>
+          </div>`;
+      });
+
+      section.innerHTML = html;
+    }
+
+    function renderHospitals(filter) {
+      const list = document.getElementById('hospitalList');
+      let hospitals = DB.hospitals.filter(h => h.approved !== false);
+      if (filter) hospitals = hospitals.filter(h => h.name.toLowerCase().includes(filter) || (h.address && h.address.toLowerCase().includes(filter)) || (h.type && h.type.toLowerCase().includes(filter)));
+
+      if (hospitals.length === 0) {
+        list.innerHTML = '<div class="card text-center" style="grid-column:1/-1;padding:3rem;"><p style="color:#6b7280;">No hospitals found matching your search.</p></div>';
+        return;
+      }
+
+      let html = '';
+      hospitals.forEach(h => {
+        const doctors = DB.getDoctorsByHospital(h.id);
+        const beds = DB.getBedsByHospital(h.id);
+        const availBeds = beds.filter(b => b.status === 'available').length;
+
+        html += `
+          <div class="card">
+            <div class="flex-between mb-1">
+              <h3 style="font-weight:600;">🏥 ${h.name}</h3>
+              <span class="badge badge-success">${h.type || 'Hospital'}</span>
+            </div>
+            <p style="font-size:0.85rem;color:#6b7280;margin-bottom:0.75rem;">
+              📍 ${h.address || 'Central'} &bull; 📞 ${h.phone || '-'}
+            </p>
+            <div class="flex gap-2 mb-2" style="font-size:0.8rem;color:#4b5563;">
+              <span>👨‍⚕️ ${doctors.length} Doctors</span>
+              <span>🛏️ ${availBeds} Available Beds</span>
+              <span>⭐ ${h.rating || 4.8}</span>
+            </div>
+            <div class="mt-2 flex gap-1">
+              <a href="appointments.html?hospital=${h.id}" class="btn btn-primary btn-sm">Book Appointment</a>
+            </div>
+          </div>`;
+      });
+      list.innerHTML = html;
+    }
+
+    function searchHospitals() {
+      const q = document.getElementById('hospitalSearch').value.toLowerCase().trim();
+      renderHospitals(q);
+    }
+  </script>
+
+</body>
+</html>

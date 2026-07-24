@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Bills — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="billing.html" class="active">Bills</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">User</span>
+      <div class="nav-avatar" id="navAvatar">U</div>
+      <a href="../index.html" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')" style="margin-left:0.75rem;font-size:0.8rem;color:#9ca3af;text-decoration:none;cursor:pointer;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="main-content" id="app" style="max-width:1000px;margin:0 auto;">
+      <h1 class="page-title">My Medical Bills</h1>
+      <p class="page-subtitle">View and pay your hospital invoices online.</p>
+
+      <div class="grid-3 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon blue">💰</div>
+          <div class="stat-number" id="totalBills">0</div>
+          <div class="stat-label">Total Bills</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">✓</div>
+          <div class="stat-number" id="paidBills">0</div>
+          <div class="stat-label">Paid Invoices</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red">⚠️</div>
+          <div class="stat-number" id="unpaidBills">0</div>
+          <div class="stat-label">Unpaid Invoices</div>
+        </div>
+      </div>
+
+      <div id="billsContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    let patientId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'patient') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+
+      patientId = profile.patientId || ('P-' + profile.uid.slice(0,6).toUpperCase());
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+
+      renderBills();
+      DB.subscribe(renderBills);
+    })();
+
+    function renderBills() {
+      let bills = DB.getBillsByPatient(patientId);
+      if (bills.length === 0) bills = DB.bills;
+
+      document.getElementById('totalBills').textContent = bills.length;
+      document.getElementById('paidBills').textContent = bills.filter(b => b.status === 'paid').length;
+      document.getElementById('unpaidBills').textContent = bills.filter(b => b.status === 'unpaid').length;
+
+      const container = document.getElementById('billsContainer');
+      if (bills.length === 0) {
+        container.innerHTML = '<div class="card text-center" style="padding:3rem;"><p style="color:#6b7280;">No medical bills found.</p></div>';
+      } else {
+        let html = '';
+        bills.forEach(bill => {
+          const itemsHtml = (bill.items || []).map(item => `<tr><td>${item.desc}</td><td style="text-align:right;">₹${item.amount}</td></tr>`).join('');
+          const hosp = DB.getHospital(bill.hospitalId);
+          html += `
+            <div class="card mb-2">
+              <div class="flex-between">
+                <div>
+                  <h3 style="font-weight:600;">🏥 ${hosp ? hosp.name : 'Hospital'}</h3>
+                  <p style="font-size:0.85rem;color:#6b7280;">Invoice #${bill.id} &bull; ${DB.formatDate(bill.date)}</p>
+                </div>
+                <span class="badge ${DB.getStatusColor(bill.status)}">${bill.status.toUpperCase()}</span>
+              </div>
+              <table class="mt-2">
+                <thead><tr><th>Item</th><th style="text-align:right;">Amount</th></tr></thead>
+                <tbody>${itemsHtml || '<tr><td>Consultation Fee</td><td style="text-align:right;">₹' + bill.totalAmount + '</td></tr>'}</tbody>
+                <tfoot>
+                  <tr><td style="font-weight:700;">Total Payable</td><td style="text-align:right;font-weight:700;color:#1a56db;">₹${bill.totalAmount}</td></tr>
+                </tfoot>
+              </table>
+              <div class="mt-2" style="display:flex;gap:0.5rem;justify-content:flex-end;">
+                ${bill.status === 'unpaid' ? `<button class="btn btn-primary btn-sm" onclick="payBill('${bill.id}')">💳 Pay Invoice Online</button>` : ''}
+                <button class="btn btn-outline btn-sm" onclick="alert('Downloading Receipt PDF...')">📄 Download Receipt</button>
+              </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+      }
+    }
+
+    function payBill(billId) {
+      const bill = DB.getBill(billId) || DB.bills.find(b => b.id === billId);
+      if (!bill) return;
+      if (!confirm('Proceed to pay ₹' + bill.totalAmount + ' online?')) return;
+      
+      bill.status = 'paid';
+      bill.paidAt = new Date().toISOString();
+      DB.notifyChange();
+      if (typeof FirestoreService !== 'undefined') FirestoreService.save('bills', bill).catch(() => {});
+      
+      alert('Payment successful! Your invoice is marked as Paid.');
+      renderBills();
+    }
+  </script>
+
+</body>
+</html>

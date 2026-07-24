@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctors — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="doctors.html" class="active">Doctors</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="billing.html">Billing</a></li>
+      <li><a href="inventory.html">Inventory</a></li>
+      <li><a href="beds.html">Beds</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">User</span>
+      <div class="nav-avatar" id="navAvatar">U</div>
+    </div>
+  </nav>
+
+  <div class="sidebar-layout">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Hospital Panel</div>
+        <a href="dashboard.html" class="sidebar-item"><span class="sidebar-icon">📊</span> Dashboard</a>
+        <a href="doctors.html" class="sidebar-item active"><span class="sidebar-icon">👨‍⚕️</span> Doctors</a>
+        <a href="appointments.html" class="sidebar-item"><span class="sidebar-icon">📅</span> Appointments</a>
+        <a href="prescriptions.html" class="sidebar-item"><span class="sidebar-icon">💊</span> Prescriptions</a>
+        <a href="billing.html" class="sidebar-item"><span class="sidebar-icon">💰</span> Billing</a>
+        <a href="inventory.html" class="sidebar-item"><span class="sidebar-icon">📦</span> Inventory</a>
+        <a href="beds.html" class="sidebar-item"><span class="sidebar-icon">🛏️</span> Bed Management</a>
+        <a href="reports.html" class="sidebar-item"><span class="sidebar-icon">📄</span> Reports</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Account</div>
+        <a href="../index.html" class="sidebar-item" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')"><span class="sidebar-icon">🚪</span> Logout</a>
+      </div>
+    </div>
+
+    <div class="main-content" id="app">
+      <div class="flex-between mb-2">
+        <div>
+          <h1 class="page-title">Doctor Management</h1>
+          <p class="page-subtitle">Add, edit, and manage doctor schedules and consultation fees.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openDocModal()">+ Add Doctor</button>
+      </div>
+
+      <div class="grid-2" id="doctorList"></div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Doctor Modal -->
+  <div class="modal-overlay" id="docModal">
+    <div class="modal">
+      <h2 class="modal-title" id="docModalTitle">Add Doctor</h2>
+      <input type="hidden" id="dEditId">
+      <div class="form-row">
+        <div class="form-group"><label>Name</label><input type="text" id="dName" placeholder="Dr. Full Name"></div>
+        <div class="form-group"><label>Specialty</label>
+          <select id="dSpecialty"><option>Cardiology</option><option>Neurology</option><option>Orthopedics</option><option>General Medicine</option><option>Pediatrics</option><option>Dermatology</option><option>ENT</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Qualification</label><input type="text" id="dQual" placeholder="MBBS, MD"></div>
+        <div class="form-group"><label>Fee (₹)</label><input type="number" id="dFee" placeholder="800"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Working Days</label><input type="text" id="dDays" placeholder="Mon-Sat"></div>
+        <div class="form-group"><label>Timing</label><input type="text" id="dTiming" placeholder="9 AM - 5 PM"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Max Patients/Day</label><input type="number" id="dMax" placeholder="10"></div>
+        <div class="form-group"><label>Status</label><select id="dStatus"><option>Active</option><option>Inactive</option><option>On Leave</option></select></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeDocModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveDoctor()">Save Doctor</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _hospId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'manager') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+      _hospId = profile.hospitalId || '';
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+      renderDoctors();
+      DB.subscribe(renderDoctors);
+    })();
+
+    function renderDoctors() {
+      let doctors = DB.getDoctorsByHospital(_hospId);
+      if (doctors.length === 0 && DB.doctors.length > 0) doctors = DB.doctors;
+
+      const container = document.getElementById('doctorList');
+      if (doctors.length === 0) {
+        container.innerHTML = '<div class="card text-center" style="grid-column:1/-1;padding:3rem;"><p style="color:#6b7280;">No doctors added yet. Click "+ Add Doctor" to create one.</p></div>';
+        return;
+      }
+      let html = '';
+      doctors.forEach((d, i) => {
+        const initials = d.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+        const colors = ['#1a56db','#059669','#7c3aed','#d97706','#dc2626'];
+        const color = colors[i % colors.length];
+        html += `
+          <div class="card">
+            <div class="flex-between">
+              <div class="flex gap-1" style="align-items:center;">
+                <div class="nav-avatar" style="width:42px;height:42px;font-size:0.9rem;background:${color};">${initials}</div>
+                <div>
+                  <h3 style="font-weight:600;">${d.name}</h3>
+                  <p style="font-size:0.85rem;color:#6b7280;">${d.specialty} &bull; ${d.qualification || 'MBBS'} &bull; ₹${d.fee}</p>
+                </div>
+              </div>
+              <span class="badge ${d.status === 'Active' ? 'badge-success' : d.status === 'On Leave' ? 'badge-warning' : 'badge-danger'}">${d.status}</span>
+            </div>
+            <div class="flex gap-2 mt-2" style="font-size:0.85rem;color:#6b7280;">
+              <span>📅 ${d.days || 'Mon-Sat'}</span>
+              <span>🕒 ${d.timing || '9 AM - 5 PM'}</span>
+              <span>👤 ${d.maxPatients || 8}/day</span>
+            </div>
+            <div class="flex gap-1 mt-2">
+              <button class="btn btn-outline btn-sm" onclick="editDoctor('${d.id}')">✏️ Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="removeDoctor('${d.id}')">Remove</button>
+            </div>
+          </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function editDoctor(docId) {
+      const d = DB.getDoctor(docId);
+      if (!d) return;
+      document.getElementById('docModalTitle').textContent = 'Edit Doctor';
+      document.getElementById('dEditId').value = d.id;
+      document.getElementById('dName').value = d.name || '';
+      document.getElementById('dSpecialty').value = d.specialty || 'General Medicine';
+      document.getElementById('dQual').value = d.qualification || 'MBBS';
+      document.getElementById('dFee').value = d.fee || 500;
+      document.getElementById('dDays').value = d.days || 'Mon-Sat';
+      document.getElementById('dTiming').value = d.timing || '9 AM - 5 PM';
+      document.getElementById('dMax').value = d.maxPatients || 10;
+      document.getElementById('dStatus').value = d.status || 'Active';
+      openDocModal();
+    }
+
+    function removeDoctor(docId) {
+      if (!confirm('Remove this doctor?')) return;
+      const idx = DB.doctors.findIndex(d => d.id === docId);
+      if (idx > -1) {
+        DB.doctors.splice(idx, 1);
+        DB.notifyChange();
+        if (typeof FirestoreService !== 'undefined') FirestoreService.remove('doctors', docId);
+        renderDoctors();
+      }
+    }
+
+    function saveDoctor() {
+      const name = document.getElementById('dName').value.trim();
+      if (!name) { alert('Please enter doctor name'); return; }
+
+      const editId = document.getElementById('dEditId').value;
+      const specialty = document.getElementById('dSpecialty').value;
+      const qualification = document.getElementById('dQual').value || 'MBBS';
+      const fee = parseInt(document.getElementById('dFee').value) || 500;
+      const days = document.getElementById('dDays').value || 'Mon-Sat';
+      const timing = document.getElementById('dTiming').value || '9 AM - 5 PM';
+      const maxPatients = parseInt(document.getElementById('dMax').value) || 8;
+      const status = document.getElementById('dStatus').value;
+
+      if (editId) {
+        const doc = DB.getDoctor(editId);
+        if (doc) {
+          doc.name = name; doc.specialty = specialty; doc.qualification = qualification;
+          doc.fee = fee; doc.days = days; doc.timing = timing; doc.maxPatients = maxPatients; doc.status = status;
+          if (typeof FirestoreService !== 'undefined') FirestoreService.save('doctors', doc);
+        }
+      } else {
+        const doc = {
+          id: DB.generateId('doc'),
+          name, specialty, qualification, hospitalId: _hospId,
+          fee, days, timing, maxPatients, status
+        };
+        DB.doctors.push(doc);
+        if (typeof FirestoreService !== 'undefined') FirestoreService.save('doctors', doc);
+      }
+
+      DB.notifyChange();
+      closeDocModal();
+      renderDoctors();
+    }
+
+    function openDocModal() {
+      if (!document.getElementById('dEditId').value) {
+        document.getElementById('docModalTitle').textContent = 'Add Doctor';
+        document.getElementById('dName').value = '';
+        document.getElementById('dQual').value = '';
+        document.getElementById('dFee').value = '500';
+        document.getElementById('dDays').value = 'Mon-Sat';
+        document.getElementById('dTiming').value = '9 AM - 5 PM';
+        document.getElementById('dMax').value = '10';
+      }
+      document.getElementById('docModal').classList.add('show');
+    }
+    
+    function closeDocModal() {
+      document.getElementById('dEditId').value = '';
+      document.getElementById('docModal').classList.remove('show');
+    }
+  </script>
+
+</body>
+</html>

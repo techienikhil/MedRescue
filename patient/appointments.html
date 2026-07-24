@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Appointments — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="appointments.html" class="active">Appointments</a></li>
+      <li><a href="billing.html">Bills</a></li>
+      <li><a href="prescriptions.html">Prescriptions</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">User</span>
+      <div class="nav-avatar" id="navAvatar">U</div>
+      <a href="../index.html" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')" style="margin-left:0.75rem;font-size:0.8rem;color:#9ca3af;text-decoration:none;cursor:pointer;">Logout</a>
+    </div>
+  </nav>
+
+  <div class="main-content" id="app" style="max-width:1000px;margin:0 auto;">
+      <div class="flex-between mb-2">
+        <div>
+          <h1 class="page-title">My Appointments</h1>
+          <p class="page-subtitle" style="margin-bottom:0;">Book appointments at registered hospitals. Urgent symptoms are automatically prioritized.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openBookModal()">+ Book New Appointment</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="filterAppts('all',this)">All</button>
+        <button class="tab" onclick="filterAppts('pending',this)">Pending</button>
+        <button class="tab" onclick="filterAppts('confirmed',this)">Confirmed</button>
+        <button class="tab" onclick="filterAppts('completed',this)">Completed</button>
+      </div>
+
+      <div id="apptList"></div>
+    </div>
+  </div>
+
+  <!-- Book Appointment Modal -->
+  <div class="modal-overlay" id="bookModal">
+    <div class="modal">
+      <button class="modal-close" onclick="closeBookModal()">&times;</button>
+      <h2 class="modal-title">Book New Appointment</h2>
+      <div class="alert alert-info mb-2">
+        Select a <strong>registered hospital</strong>. Your request will be evaluated and sent to hospital staff.
+      </div>
+      <div class="form-group">
+        <label>Select Hospital</label>
+        <select id="bkHospital" onchange="onHospitalSelect()">
+          <option value="">-- Select Registered Hospital --</option>
+        </select>
+        <div id="hospInfo" style="font-size:0.85rem;color:#6b7280;margin-top:0.3rem;display:none;"></div>
+      </div>
+      <div class="form-group">
+        <label>Doctor</label>
+        <select id="bkDoctor">
+          <option value="">Select hospital first</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="bkDate">
+        </div>
+        <div class="form-group">
+          <label>Time</label>
+          <select id="bkTime">
+            <option value="">Select time</option>
+            <option>9:00 AM</option><option>9:30 AM</option><option>10:00 AM</option>
+            <option>10:30 AM</option><option>11:00 AM</option><option>11:30 AM</option>
+            <option>2:00 PM</option><option>2:30 PM</option><option>3:00 PM</option>
+            <option>3:30 PM</option><option>4:00 PM</option><option>4:30 PM</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Symptoms / Reason for Visit</label>
+        <textarea id="bkSymptoms" placeholder="Describe symptoms in detail (e.g., chest pain, fever, fracture, headache)..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeBookModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="bookAppointment()">🚀 Confirm & Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Modal -->
+  <div class="modal-overlay" id="successModal">
+    <div class="modal" style="text-align:center;">
+      <button class="modal-close" onclick="closeSuccessModal()">&times;</button>
+      <div style="font-size:3rem;margin-bottom:1rem;">✔️</div>
+      <h2 class="modal-title" style="text-align:center;">Booking Request Sent!</h2>
+      <p style="color:#6b7280;margin-bottom:1.5rem;">
+        Your appointment request has been submitted to <strong id="successHospName">the hospital</strong>.<br>
+        <span id="priorityMsg"></span>
+      </p>
+      <div style="background:#f9fafb;border-radius:8px;padding:1rem;margin-bottom:1.5rem;text-align:left;">
+        <p style="font-size:0.85rem;margin-bottom:0.25rem;"><strong>Doctor:</strong> <span id="successDoc"></span></p>
+        <p style="font-size:0.85rem;margin-bottom:0.25rem;"><strong>Date:</strong> <span id="successDate"></span></p>
+        <p style="font-size:0.85rem;"><strong>Time:</strong> <span id="successTime"></span></p>
+      </div>
+      <button class="btn btn-primary" onclick="closeSuccessModal()">OK, Got It</button>
+    </div>
+  </div>
+
+  <script>
+    let patientId = '';
+    let currentUserName = '';
+
+    async function initApptPage() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'patient') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+      
+      patientId = profile.patientId || ('P-' + profile.uid.slice(0, 6).toUpperCase());
+      currentUserName = profile.name;
+      
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+      
+      // Pre-fill hospital from URL parameter if present
+      const urlParams = new URLSearchParams(window.location.search);
+      const preHosp = urlParams.get('hospital');
+      if (preHosp) {
+        setTimeout(() => {
+          openBookModal();
+          document.getElementById('bkHospital').value = preHosp;
+          onHospitalSelect();
+        }, 300);
+      }
+
+      renderAppts('all');
+      DB.subscribe(() => renderAppts('all'));
+    }
+
+    function loadHospitals() {
+      const sel = document.getElementById('bkHospital');
+      sel.innerHTML = '<option value="">-- Select Registered Hospital --</option>';
+      const approved = DB.hospitals.filter(h => h.approved !== false);
+      if (approved.length === 0) {
+        sel.innerHTML += '<option value="" disabled>No registered hospitals yet</option>';
+        return;
+      }
+      approved.forEach(h => {
+        const opt = document.createElement('option');
+        opt.value = h.id;
+        opt.textContent = h.name + ' (' + (h.address ? h.address.split(',')[0] : 'Central') + ')';
+        sel.appendChild(opt);
+      });
+    }
+
+    function onHospitalSelect() {
+      const hId = document.getElementById('bkHospital').value;
+      const infoDiv = document.getElementById('hospInfo');
+      const docSelect = document.getElementById('bkDoctor');
+      docSelect.innerHTML = '<option value="">Select doctor...</option>';
+
+      if (!hId) {
+        infoDiv.style.display = 'none';
+        return;
+      }
+
+      const hosp = DB.getHospital(hId);
+      let doctors = DB.getDoctorsByHospital(hId).filter(d => d.status === 'Active');
+      if (doctors.length === 0 && DB.doctors.length > 0) doctors = DB.doctors;
+
+      if (hosp) {
+        infoDiv.style.display = 'block';
+        infoDiv.innerHTML = '🏥 ' + hosp.name + ' &bull; ' + (hosp.address || '') + ' &bull; ' + doctors.length + ' doctors available';
+      }
+
+      if (doctors.length === 0) {
+        docSelect.innerHTML = '<option value="">No doctors available at this hospital</option>';
+        return;
+      }
+
+      doctors.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.name + ' (' + d.specialty + ') - Consultation ₹' + d.fee;
+        docSelect.appendChild(opt);
+      });
+    }
+
+    // Set date constraints
+    const today = new Date();
+    document.getElementById('bkDate').value = today.toISOString().split('T')[0];
+    document.getElementById('bkDate').min = today.toISOString().split('T')[0];
+
+    async function bookAppointment() {
+      const hId = document.getElementById('bkHospital').value;
+      const dId = document.getElementById('bkDoctor').value;
+      const date = document.getElementById('bkDate').value;
+      const time = document.getElementById('bkTime').value;
+      const symptoms = document.getElementById('bkSymptoms').value.trim();
+
+      if (!hId) { alert('Please select a registered hospital'); return; }
+      if (!dId) { alert('Please select a doctor'); return; }
+      if (!time) { alert('Please select a time slot'); return; }
+      if (!symptoms) { alert('Please describe your symptoms'); return; }
+
+      const hosp = DB.getHospital(hId);
+      const doc = DB.getDoctor(dId);
+      const priority = DB.assessPriority(symptoms);
+
+      const appt = {
+        id: DB.generateId('appt'),
+        patientId: patientId,
+        patientName: currentUserName,
+        doctorId: dId,
+        doctorName: doc ? doc.name : 'Dr. Consultant',
+        hospitalId: hId,
+        hospitalName: hosp ? hosp.name : 'Hospital',
+        date: date,
+        time: time,
+        symptoms: symptoms,
+        status: 'pending',
+        priority: priority,
+        createdAt: new Date().toISOString()
+      };
+
+      DB.appointments.push(appt);
+      DB.notifyChange();
+
+      if (typeof FirestoreService !== 'undefined') {
+        FirestoreService.save('appointments', appt).catch(() => {});
+      }
+
+      // Show success
+      document.getElementById('successHospName').textContent = hosp ? hosp.name : 'Hospital';
+      document.getElementById('successDoc').textContent = doc ? doc.name + ' (' + doc.specialty + ')' : 'Assigned Doctor';
+      document.getElementById('successDate').textContent = DB.formatDate(date);
+      document.getElementById('successTime').textContent = time;
+      document.getElementById('priorityMsg').innerHTML = priority === 'high' 
+        ? '<span style="color:#dc2626;font-weight:600;">⚠️ Flagged as HIGH URGENCY based on symptoms. Priority queue assigned.</span>' 
+        : 'The hospital will review and confirm your booking shortly.';
+
+      // Reset form
+      document.getElementById('bkHospital').value = '';
+      document.getElementById('bkDoctor').innerHTML = '<option value="">Select hospital first</option>';
+      document.getElementById('bkSymptoms').value = '';
+      document.getElementById('hospInfo').style.display = 'none';
+
+      closeBookModal();
+      document.getElementById('successModal').classList.add('show');
+      renderAppts('all');
+    }
+
+    function renderAppts(filter) {
+      let appts = DB.getAppointmentsByPatient(patientId);
+      if (appts.length === 0) appts = DB.appointments;
+      appts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      if (filter !== 'all') appts = appts.filter(a => a.status === filter);
+
+      const container = document.getElementById('apptList');
+      if (appts.length === 0) {
+        container.innerHTML = '<div class="card text-center" style="padding:3rem;"><p style="color:#6b7280;">No appointments found.</p><button class="btn btn-primary mt-2" onclick="openBookModal()">+ Book Your First Appointment</button></div>';
+        return;
+      }
+
+      let html = '';
+      appts.forEach(a => {
+        const doc = DB.getDoctor(a.doctorId);
+        const hosp = DB.getHospital(a.hospitalId);
+        const priorityHtml = DB.getPriorityLabel(a.priority);
+
+        html += `
+          <div class="card mb-2">
+            <div class="flex-between" style="align-items:flex-start;">
+              <div style="flex:1;">
+                <div class="flex gap-1" style="align-items:center;flex-wrap:wrap;">
+                  <h3 style="font-weight:600;">🏥 ${hosp ? hosp.name : a.hospitalName || 'Hospital'}</h3>
+                  <span class="badge ${a.status === 'pending' ? 'badge-warning' : a.status === 'confirmed' ? 'badge-info' : 'badge-success'}">${a.status.toUpperCase()}</span>
+                  ${priorityHtml}
+                </div>
+                <p style="font-size:0.85rem;color:#6b7280;margin-top:0.5rem;">
+                  <strong>Doctor:</strong> ${doc ? doc.name + ' (' + doc.specialty + ')' : a.doctorName || 'Assigned'} &bull; <strong>Date:</strong> ${DB.formatDate(a.date)} at ${a.time}
+                </p>
+                <p style="font-size:0.85rem;color:#4b5563;"><strong>Symptoms:</strong> ${a.symptoms}</p>
+                ${a.status === 'pending' ? '<p style="font-size:0.8rem;color:#d97706;margin-top:0.25rem;">⏳ Awaiting hospital confirmation...</p>' : ''}
+                ${a.status === 'confirmed' ? '<p style="font-size:0.8rem;color:#059669;margin-top:0.25rem;">✓ Confirmed by hospital. Please arrive 10 mins early.</p>' : ''}
+              </div>
+              <div style="display:flex;gap:0.5rem;flex-shrink:0;">
+                ${a.status === 'pending' ? '<button class="btn btn-danger btn-sm" onclick="cancelAppt(\''+a.id+'\')">Cancel Request</button>' : ''}
+                ${a.status === 'completed' ? '<a href="reports.html" class="btn btn-primary btn-sm">View Report</a>' : ''}
+              </div>
+            </div>
+          </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function cancelAppt(id) {
+      const appt = DB.appointments.find(a => a.id === id);
+      if (appt && confirm('Cancel this appointment request?')) {
+        appt.status = 'cancelled';
+        DB.notifyChange();
+        if (typeof FirestoreService !== 'undefined') FirestoreService.save('appointments', appt).catch(() => {});
+      }
+      renderAppts('all');
+    }
+
+    function filterAppts(filter, btn) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      renderAppts(filter);
+    }
+
+    function openBookModal() {
+      loadHospitals();
+      document.getElementById('bookModal').classList.add('show');
+    }
+
+    function closeBookModal() {
+      document.getElementById('bookModal').classList.remove('show');
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('successModal').classList.remove('show');
+    }
+
+    initApptPage();
+  </script>
+
+</body>
+</html>

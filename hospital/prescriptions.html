@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prescriptions — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="dashboard.html">Dashboard</a></li>
+      <li><a href="doctors.html">Doctors</a></li>
+      <li><a href="appointments.html">Appointments</a></li>
+      <li><a href="prescriptions.html" class="active">Prescriptions</a></li>
+      <li><a href="billing.html">Billing</a></li>
+      <li><a href="inventory.html">Inventory</a></li>
+      <li><a href="beds.html">Beds</a></li>
+      <li><a href="reports.html">Reports</a></li>
+    </ul>
+    <div class="nav-user">
+      <span id="navUserName">Hospital</span>
+      <div class="nav-avatar" id="navAvatar">H</div>
+    </div>
+  </nav>
+
+  <div class="sidebar-layout">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Hospital Panel</div>
+        <a href="dashboard.html" class="sidebar-item"><span class="sidebar-icon">📊</span> Dashboard</a>
+        <a href="doctors.html" class="sidebar-item"><span class="sidebar-icon">👨‍⚕️</span> Doctors</a>
+        <a href="appointments.html" class="sidebar-item"><span class="sidebar-icon">📅</span> Appointments</a>
+        <a href="prescriptions.html" class="sidebar-item active"><span class="sidebar-icon">💊</span> Prescriptions</a>
+        <a href="billing.html" class="sidebar-item"><span class="sidebar-icon">💰</span> Billing</a>
+        <a href="inventory.html" class="sidebar-item"><span class="sidebar-icon">📦</span> Inventory</a>
+        <a href="beds.html" class="sidebar-item"><span class="sidebar-icon">🛏️</span> Bed Management</a>
+        <a href="reports.html" class="sidebar-item"><span class="sidebar-icon">📄</span> Reports</a>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Account</div>
+        <a href="../index.html" class="sidebar-item" onclick="event.preventDefault();Auth.logout().then(()=>window.location.href='../index.html')"><span class="sidebar-icon">🚪</span> Logout</a>
+      </div>
+    </div>
+
+    <div class="main-content" id="app">
+      <div class="flex-between mb-2">
+        <div>
+          <h1 class="page-title">Digital Prescriptions</h1>
+          <p class="page-subtitle">Issue and track patient digital prescriptions.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openPrescModal()">+ Issue Prescription</button>
+      </div>
+
+      <div class="grid-3 mb-3">
+        <div class="stat-card"><div class="stat-icon blue">💊</div><div class="stat-number" id="totalPrescs">0</div><div class="stat-label">Total Prescriptions</div></div>
+        <div class="stat-card"><div class="stat-icon green">👨‍⚕️</div><div class="stat-number" id="activeDocsCount">0</div><div class="stat-label">Active Doctors</div></div>
+        <div class="stat-card"><div class="stat-icon purple">👥</div><div class="stat-number" id="patientsCount">0</div><div class="stat-label">Total Patients</div></div>
+      </div>
+
+      <div class="card" id="prescTable"></div>
+    </div>
+  </div>
+
+  <!-- Add Prescription Modal -->
+  <div class="modal-overlay" id="prescModal">
+    <div class="modal" style="max-width:600px;">
+      <h2 class="modal-title">Issue Digital Prescription</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Patient</label>
+          <select id="pPatient"><option value="">Select patient...</option></select>
+        </div>
+        <div class="form-group">
+          <label>Doctor</label>
+          <select id="pDoctor"><option value="">Select doctor...</option></select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Medicines (Format: Medicine Name - Dosage - Duration Days)</label>
+        <textarea id="pMedicines" placeholder="e.g. Paracetamol 650mg - 1 tablet twice daily - 5&#10;Amoxicillin 500mg - 1 capsule thrice daily - 7"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Doctor Notes / Instructions</label>
+        <textarea id="pNotes" placeholder="e.g. Drink plenty of water. Take medicines after food."></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closePrescModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="issuePrescription()">Issue & Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _hospId = '';
+
+    (async function() {
+      const profile = await Auth.requireAuth();
+      if (profile.role !== 'manager') { window.location.href = '../login.html'; return; }
+      await new Promise(resolve => DB.onReady(resolve));
+      _hospId = profile.hospitalId || '';
+
+      document.getElementById('navUserName').textContent = profile.name;
+      document.getElementById('navAvatar').textContent = profile.name.split(' ').map(w => w[0]).join('').slice(0,2);
+
+      populateDropdowns();
+      renderPrescriptions();
+
+      DB.subscribe(renderPrescriptions);
+    })();
+
+    function populateDropdowns() {
+      const patients = DB.getPatientsByHospital(_hospId);
+      const pSel = document.getElementById('pPatient');
+      pSel.innerHTML = '<option value="">Select patient...</option>';
+      if (patients.length === 0 && DB.patients.length > 0) {
+        DB.patients.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name + ' (' + p.id + ')';
+          pSel.appendChild(o);
+        });
+      } else {
+        patients.forEach(p => {
+          const o = document.createElement('option');
+          o.value = p.id;
+          o.textContent = p.name + ' (' + p.id + ')';
+          pSel.appendChild(o);
+        });
+      }
+
+      const doctors = DB.getDoctorsByHospital(_hospId).filter(d => d.status === 'Active');
+      const dSel = document.getElementById('pDoctor');
+      dSel.innerHTML = '<option value="">Select doctor...</option>';
+      doctors.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.id;
+        o.textContent = d.name + ' (' + d.specialty + ')';
+        dSel.appendChild(o);
+      });
+
+      document.getElementById('activeDocsCount').textContent = doctors.length;
+      document.getElementById('patientsCount').textContent = DB.patients.length;
+    }
+
+    function renderPrescriptions() {
+      const prescs = DB.prescriptions.filter(p => p.hospitalId === _hospId || !p.hospitalId);
+      document.getElementById('totalPrescs').textContent = prescs.length;
+
+      const container = document.getElementById('prescTable');
+      if (prescs.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:3rem;"><p style="color:#6b7280;">No prescriptions issued yet. Click "+ Issue Prescription" to start.</p></div>';
+        return;
+      }
+
+      let html = `<table><thead><tr><th>Date</th><th>Patient</th><th>Doctor</th><th>Medicines</th><th>Notes</th><th>Status</th></tr></thead><tbody>`;
+      prescs.forEach(p => {
+        const pat = DB.getPatient(p.patientId);
+        const doc = DB.getDoctor(p.doctorId);
+        const medsSummary = (p.medicines || []).map(m => m.name + ' (' + m.dosage + ')').join(', ');
+
+        html += `<tr>
+          <td>${DB.formatDate(p.date)}</td>
+          <td><strong>${pat ? pat.name : p.patientId}</strong></td>
+          <td>${doc ? doc.name : '-'}</td>
+          <td style="font-size:0.85rem;">${medsSummary || '-'}</td>
+          <td style="font-size:0.85rem;color:#6b7280;">${p.notes || '-'}</td>
+          <td><span class="badge badge-success">Active</span></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function openPrescModal() {
+      populateDropdowns();
+      document.getElementById('prescModal').classList.add('show');
+    }
+
+    function closePrescModal() {
+      document.getElementById('prescModal').classList.remove('show');
+    }
+
+    function issuePrescription() {
+      const pid = document.getElementById('pPatient').value;
+      const did = document.getElementById('pDoctor').value;
+      const rawMeds = document.getElementById('pMedicines').value.trim();
+      const notes = document.getElementById('pNotes').value.trim();
+
+      if (!pid || !did || !rawMeds) {
+        alert('Please select patient, doctor, and enter medicine details.');
+        return;
+      }
+
+      const medicines = rawMeds.split('\n').map(line => {
+        const parts = line.split('-');
+        return {
+          name: parts[0] ? parts[0].trim() : 'Medicine',
+          dosage: parts[1] ? parts[1].trim() : '1 daily',
+          days: parts[2] ? parseInt(parts[2].trim()) || 5 : 5
+        };
+      });
+
+      const presc = {
+        id: DB.generateId('presc'),
+        patientId: pid,
+        doctorId: did,
+        hospitalId: _hospId,
+        date: new Date().toISOString().split('T')[0],
+        medicines: medicines,
+        notes: notes
+      };
+
+      DB.prescriptions.push(presc);
+      DB.notifyChange();
+
+      if (typeof FirestoreService !== 'undefined') {
+        FirestoreService.save('prescriptions', presc).catch(() => {});
+      }
+
+      document.getElementById('pMedicines').value = '';
+      document.getElementById('pNotes').value = '';
+      closePrescModal();
+      renderPrescriptions();
+      alert('Prescription issued successfully!');
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Access — MedRescue</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/firestore-service.js"></script>
+  <script src="../js/auth.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="../index.html" class="nav-logo">
+      <span class="logo-mark" aria-hidden="true">
+        <img src="../assets/medrescue-logo.svg" alt="MedRescue logo" />
+      </span>
+      <span class="logo-text">MedRescue</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../login.html">Login</a></li>
+    </ul>
+  </nav>
+
+  <div style="min-height:80vh;display:flex;align-items:center;justify-content:center;padding:2rem;">
+    <div class="card" style="max-width:460px;width:100%;padding:2rem;text-align:center;">
+
+      <div style="font-size:3rem;margin-bottom:0.75rem;">🛡️</div>
+      <h2 class="modal-title" style="text-align:center;margin-bottom:0.5rem;">Super Admin Access</h2>
+      <p style="color:#6b7280;font-size:0.9rem;margin-bottom:1.5rem;">
+        Sign in with a Firebase-authenticated account whose UID is allowlisted as the super admin.
+      </p>
+
+      <div id="errorMsg" class="alert alert-danger" style="display:none;"></div>
+
+      <button class="btn btn-primary" style="width:100%;margin-bottom:0.75rem;padding:0.75rem;" onclick="window.location.href='../login.html'">🔐 Go to Login</button>
+      <button class="btn btn-outline" style="width:100%;" onclick="window.location.href='dashboard.html'">📊 Open Admin Dashboard</button>
+
+      <div style="margin-top:1.5rem;padding:1rem;background:#f9fafb;border-radius:8px;text-align:left;font-size:0.85rem;">
+        <p style="margin-bottom:0.25rem;"><strong>Current deployment model:</strong></p>
+        <p style="margin:0;">Admin access is granted by Firebase Authentication UID, not by a hardcoded key.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    Auth.init().then((user) => {
+      if (user && Auth.userProfile && Auth.userProfile.role === 'admin') {
+        window.location.href = 'dashboard.html';
+        return;
+      }
+      if (user && Auth.userProfile) {
+        Auth.redirectToPanel(Auth.userProfile);
+      }
+    }).catch(() => {
+      document.getElementById('errorMsg').textContent = 'Unable to initialize authentication. Please refresh the page.';
+      document.getElementById('errorMsg').style.display = 'block';
+    });
+  </script>
+
+</body>
+</html>
