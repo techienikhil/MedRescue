@@ -51,7 +51,7 @@ Follow these steps to run MedRescue locally:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/MedRescue.git
+git clone https://github.com/techienikhil/MedRescue.git
 cd MedRescue
 ```
 
