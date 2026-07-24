@@ -13,8 +13,6 @@ In modern clinics and mid-tier hospitals, patient management is highly fragmente
 - **No Unified History:** Doctors lack immediate access to holistic patient medication and medical history.
 - **Triage Failures:** Critical patients (e.g., heart disease) are often stuck in the same queue as routine check-ups.
 - **Resource Mismanagement:** Bed allocation and pharmacy inventory (medication stock) are tracked manually, leading to dangerous shortages.
-- **Low-Tech Adherence:** Sometimes patients miss medication doses.
-
 ---
 
 ## 💡 Our Solution
