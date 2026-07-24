@@ -4,7 +4,7 @@
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **MedRescue** is a decentralized, AI-driven hospital management and triage ecosystem designed to eliminate clinical bottlenecks, digitize patient history, and automate critical resource allocation. Built during the 24-hour **HackVSIT 7.0** sprint.
+> **MedRescue** is a decentralized, 3hospital management and triage ecosystem designed to eliminate clinical bottlenecks, digitize patient history, and automate critical resource allocation. Built during the 24-hour **HackVSIT 7.0** sprint.
 
 ---
 
@@ -13,14 +13,14 @@ In modern clinics and mid-tier hospitals, patient management is highly fragmente
 - **No Unified History:** Doctors lack immediate access to holistic patient medication and medical history.
 - **Triage Failures:** Critical patients (e.g., heart disease) are often stuck in the same queue as routine check-ups.
 - **Resource Mismanagement:** Bed allocation and pharmacy inventory (medication stock) are tracked manually, leading to dangerous shortages.
-- **Low-Tech Adherence:** Patients miss medication doses because they lack smartphones or reliable internet for push notifications.
+- **Low-Tech Adherence:** Sometimes patients miss medication doses.
 
 ---
 
 ## 💡 Our Solution
 MedRescue replaces the chaos with an intelligent, end-to-end platform:
 1. **Universal Patient ID:** A single ID instantly fetches the patient's entire medical history and current prescriptions.
-2. **AI-Powered Priority Triage:** The system analyzes patient profiles upon registration. If critical symptoms (like a history of heart disease) are detected, they are automatically bumped to the top of the queue.
+2. **AI-Powered Priority Triage(upcoming Featurek):** The system analyzes patient profiles upon registration. If critical symptoms (like a history of heart disease) are detected, they are automatically bumped to the top of the queue.
 3. **Smart Inventory & Bed Allocation:** Real-time tracking of medication quantities and hospital bed availability, with AI predictive restocking and outbreak detection.
 4. **"Zero-Data" Med Reminders:** Using an automated missed-call system, patients receive medication reminders without needing a smartphone or active data plan.
 
@@ -83,9 +83,9 @@ The application will start on `http://localhost:3000`.
 
 ## 👥 The Team
 We are a team of passionate developers from KIET Ghaziabad, building this for HackVSIT 7.0!
-* **Nikhil Kumar** - [GitHub](https://github.com/techienikhil) / [LinkedIn](https://www.linkedin.com/in/techienikhil/)
-* **Dhruv Sharma** - [GitHub](https://github.com/dhruv-lx) / [LinkedIn](https://www.linkedin.com/in/dhruv-sharma55/)
 * **Aditya Pritam** - [GitHub](https://github.com/adityapritam) / [LinkedIn](https://www.linkedin.com/in/adityapritam)
+* **Dhruv Sharma** - [GitHub](https://github.com/dhruv-lx) / [LinkedIn](https://www.linkedin.com/in/dhruv-sharma55/)
+* **Nikhil Kumar** - [GitHub](https://github.com/techienikhil) / [LinkedIn](https://www.linkedin.com/in/techienikhil/)
 
 ---
 *Made with ❤️ for HackVSIT.*
