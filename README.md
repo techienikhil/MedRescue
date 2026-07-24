@@ -83,10 +83,9 @@ The application will start on `http://localhost:3000`.
 
 ## 👥 The Team
 We are a team of passionate developers from KIET Ghaziabad, building this for HackVSIT 7.0!
-* **Nikhil Kumar** - [GitHub](https://github.com/) / [LinkedIn](https://linkedin.com/)
-* **Team Member 2** - [GitHub](https://github.com/) / [LinkedIn](https://linkedin.com/)
-* **Team Member 3** - [GitHub](https://github.com/) / [LinkedIn](https://linkedin.com/)
-* **Team Member 4** - [GitHub](https://github.com/) / [LinkedIn](https://linkedin.com/)
+* **Nikhil Kumar** - [GitHub](https://github.com/techienikhil) / [LinkedIn](https://www.linkedin.com/in/techienikhil/)
+* **Dhruv Sharma** - [GitHub](https://github.com/dhruv-lx) / [LinkedIn](https://www.linkedin.com/in/dhruv-sharma55/)
+* **Aditya Pritam** - [GitHub](https://github.com/adityapritam) / [LinkedIn](https://www.linkedin.com/in/adityapritam)
 
 ---
 *Made with ❤️ for HackVSIT.*
